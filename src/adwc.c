@@ -649,10 +649,10 @@ weston_compositor_pick_surface(struct weston_compositor *compositor,
 			       int32_t x, int32_t y, int32_t *sx, int32_t *sy)
 {
 	struct weston_surface *surface;
-//	dTrace_E("");
+	dTrace_E("");
 	
 	wl_list_for_each(surface, &compositor->surface_list, link) {
-	//	printf ("weston_compositor_pick_surface %d %d\n", surface->geometry.x, surface->geometry.y);
+		printf ("weston_compositor_pick_surface %d %d\n", surface->geometry.x, surface->geometry.y);
 		weston_surface_from_global(surface, x, y, sx, sy);
 		if (pixman_region32_contains_point(&surface->input,
 						   *sx, *sy, NULL))
@@ -2019,9 +2019,9 @@ input_device_attach(struct wl_client *client,
 	//		       &device->sprite->layer_link);
 		weston_surface_assign_output(device->sprite);
 	//	device->sprite->output = container_of(gShell.compositor->output_list.next, struct weston_output, link);
-		printf ("!!!!!!!!!!!! input_device_attach %lx\n", device->sprite->output);
+	//	printf ("!!!!!!!!!!!! input_device_attach %lx\n", device->sprite->output);
 //	}
-
+	
 
 	device->hotspot_x = x;
 	device->hotspot_y = y;
@@ -4955,10 +4955,11 @@ void shell_restack()
 	}
 	
 	struct weston_input_device* wid;
-	wl_list_for_each(wid, &gShell.compositor->input_device_list, link) {
+/*	wl_list_for_each(wid, &gShell.compositor->input_device_list, link) {
 		printf ("wid %lx\n", wid);
 		wl_list_insert(&gShell.compositor->surface_list, &wid->sprite->link);
-	}
+	//	weston_surface_assign_output(wid->sprite);
+	}*/
 	
 	weston_compositor_damage_all(gShell.compositor);
 	dTrace_L("");
