@@ -19,6 +19,7 @@ weston_SOURCES =			\
 	screenshooter.c				\
 	screenshooter-protocol.c		\
 	screenshooter-server-protocol.h		\
+	desktop-shell-protocol.c					\
 	util.c					\
 	matrix.c				\
 	matrix.h				\
