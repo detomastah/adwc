@@ -779,6 +779,7 @@ create_output(struct desktop *desktop, uint32_t id)
 
 	output->output = wl_display_bind(display_get_display(desktop->display),
 					 id, &wl_output_interface);
+	printf("Display ID: %d\n", id);
 
 	wl_list_insert(&desktop->outputs, &output->link);
 }
@@ -840,7 +841,9 @@ add_default_tags(struct desktop *desktop)
 	wl_list_for_each(output, &desktop->outputs, link)
 	{
 		panel_add_tag(output->panel, desktop, 1);
-		panel_add_tag(output->panel, desktop,2);
+		panel_add_tag(output->panel, desktop, 2);
+		panel_add_tag(output->panel, desktop, 4);
+		panel_add_tag(output->panel, desktop, 8);
     }
 }
 
