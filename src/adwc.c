@@ -81,6 +81,67 @@
 static struct wl_list child_process_list;
 static jmp_buf segv_jmp_buf;
 
+
+
+
+typedef struct {
+	unsigned long sec, nsec;
+} tSC_time;
+
+static inline void	SC_time_Start	(tSC_time* pt)
+{
+	struct timespec time;
+	clock_gettime (CLOCK_REALTIME, &time);
+	pt->sec = time.tv_sec;
+	pt->nsec = time.tv_nsec;
+}
+
+static inline double	SC_time_Diff	(tSC_time* pt)
+{
+	struct timespec time;
+	clock_gettime (CLOCK_REALTIME, &time);
+	
+	pt->sec = time.tv_sec - pt->sec;
+	if (pt->nsec <= time.tv_nsec) {
+		pt->nsec = time.tv_nsec - pt->nsec;
+	} else {
+		pt->sec -= 1;
+		pt->nsec = 1000000000 - pt->nsec + time.tv_nsec;
+	}
+	return pt->sec*1000 + pt->nsec/1000000.0;
+}
+
+#define dts()	tSC_time _d_time;	SC_time_Start (&_d_time)
+#define dte(name)	printf ("%s: " #name "	Time	%f\n", __FUNCTION__, SC_time_Diff (&_d_time))
+
+
+
+#define dTrace_E(fmt,...)		\
+	do {		\
+		printf (">%s:\t" fmt "\n", __FUNCTION__ ,##__VA_ARGS__);		\
+	}while(0)
+#define dTrace_L(fmt,...)		\
+	do {		\
+		printf ("<%s:\t" fmt "\n", __FUNCTION__ ,##__VA_ARGS__);		\
+	}while(0)
+
+#define dTrace_E_Client(c)		\
+	do {		\
+		if (c)		\
+			dTrace_E("name %s", c->name);		\
+		else		\
+			dTrace_E("c %lx", c);		\
+	}while(0)
+#define dTrace_L_Client(c)		\
+	do {		\
+		if (c)		\
+			dTrace_L("name %s", c->name);		\
+		else		\
+			dTrace_L("c %lx", c);		\
+	}while(0)
+
+
+
 static int
 sigchld_handler(int signal_number, void *data)
 {
