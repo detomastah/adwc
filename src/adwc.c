@@ -60,8 +60,6 @@
 static struct wl_list child_process_list;
 static jmp_buf segv_jmp_buf;
 
-
-
 typedef struct {
 	unsigned long sec, nsec;
 } tSC_time;
@@ -2602,7 +2600,6 @@ on_segv_signal(int s, siginfo_t *siginfo, void *context)
 			info.dli_sname ? info.dli_sname : "--",
 			info.dli_fname);
 	}
-
 	longjmp(segv_jmp_buf, 1);
 }
 
@@ -4852,8 +4849,8 @@ switcher_binding(struct wl_input_device *device, uint32_t time,
 
 static struct weston_output*	CurrentOutput	()
 {
-	struct weston_output* out = container_of(gShell.compositor->output_list.next, struct weston_output, link);
-	return out;
+/*	struct weston_output* out = container_of(gShell.compositor->output_list.next, struct weston_output, link);
+	return out;*/
 /*	struct weston_layer *layer;
 	wl_list_for_each(layer, &gShell->compositor->cursor_layer, link) {
 		struct weston_surface *es;
@@ -4862,12 +4859,13 @@ static struct weston_output*	CurrentOutput	()
 		}
 		break;
 	}*/
-	struct weston_surface *es;
+        return ((struct weston_input_device*) gShell.compositor->input_device)->sprite->output;
+/*	struct weston_surface *es;
 //	wl_list_for_each(es, &gShell.compositor->cursor_layer.surface_list, layer_link) {
 	wl_list_for_each(es, &gShell.compositor->cursor_layer.surface_list, link) {
 		return es->output;
 		break;
-	}
+	}*/
 }
 
 
@@ -4902,8 +4900,16 @@ static void		Act_Output_TagSet		(struct wl_input_device *device, uint32_t time, 
 	
 }
 
-
-
+static void		Act_Surf_Teleport               (struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data) {
+	struct weston_surface* surf = gShell.compositor->input_device->current;
+	if (!surf)
+		return;
+	struct shell_surface* shsurf = get_shell_surface(surf);
+        struct weston_output* tgt = surf->output->link.next;
+	shsurf->Tags = data;
+        shsurf->output = tgt;
+	shell_restack();
+}
 
 
 
