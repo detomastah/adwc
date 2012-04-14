@@ -1,0 +1,98 @@
+/* config.h.in.  Generated from configure.ac by autoheader.  */
+
+/* Build the Wayland clients */
+#undef BUILD_CLIENTS
+
+/* Build the DRM compositor */
+#undef BUILD_DRM_COMPOSITOR
+
+/* Build the OpenWF compositor */
+#undef BUILD_OPENWFD_COMPOSITOR
+
+/* Build the Wayland simple clients */
+#undef BUILD_SIMPLE_CLIENTS
+
+/* Build the Wayland (nested) compositor */
+#undef BUILD_WAYLAND_COMPOSITOR
+
+/* Build the X11 compositor */
+#undef BUILD_X11_COMPOSITOR
+
+/* Build the X server launcher */
+#undef BUILD_XSERVER_LAUNCHER
+
+/* Have cairo-egl */
+#undef HAVE_CAIRO_EGL
+
+/* Define to 1 if you have the <dlfcn.h> header file. */
+#undef HAVE_DLFCN_H
+
+/* Define to 1 if you have the <inttypes.h> header file. */
+#undef HAVE_INTTYPES_H
+
+/* Define to 1 if you have the <memory.h> header file. */
+#undef HAVE_MEMORY_H
+
+/* Define to 1 if you have the <stdint.h> header file. */
+#undef HAVE_STDINT_H
+
+/* Define to 1 if you have the <stdlib.h> header file. */
+#undef HAVE_STDLIB_H
+
+/* Define to 1 if you have the <strings.h> header file. */
+#undef HAVE_STRINGS_H
+
+/* Define to 1 if you have the <string.h> header file. */
+#undef HAVE_STRING_H
+
+/* Have systemd-login */
+#undef HAVE_SYSTEMD_LOGIN
+
+/* Define to 1 if you have the <sys/stat.h> header file. */
+#undef HAVE_SYS_STAT_H
+
+/* Define to 1 if you have the <sys/types.h> header file. */
+#undef HAVE_SYS_TYPES_H
+
+/* Define to 1 if you have the <unistd.h> header file. */
+#undef HAVE_UNISTD_H
+
+/* Have webp */
+#undef HAVE_WEBP
+
+/* Define to 1 if you have the `xcb_poll_for_queued_event' function. */
+#undef HAVE_XCB_POLL_FOR_QUEUED_EVENT
+
+/* Define to the sub-directory in which libtool stores uninstalled libraries.
+   */
+#undef LT_OBJDIR
+
+/* Name of package */
+#undef PACKAGE
+
+/* Define to the address where bug reports for this package should be sent. */
+#undef PACKAGE_BUGREPORT
+
+/* Define to the full name of this package. */
+#undef PACKAGE_NAME
+
+/* Define to the full name and version of this package. */
+#undef PACKAGE_STRING
+
+/* Define to the one symbol short name of this package. */
+#undef PACKAGE_TARNAME
+
+/* Define to the home page for this package. */
+#undef PACKAGE_URL
+
+/* Define to the version of this package. */
+#undef PACKAGE_VERSION
+
+/* Define to 1 if you have the ANSI C header files. */
+#undef STDC_HEADERS
+
+/* Use the GLESv2 GL cairo backend */
+#undef USE_CAIRO_GLESV2
+
+/* Version number of package */
+#undef VERSION

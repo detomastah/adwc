@@ -1,0 +1,145 @@
+bin_PROGRAMS =					\
+	$(terminal)
+
+noinst_PROGRAMS =				\
+	$(clients_programs)			\
+	$(poppler_programs)			\
+	$(simple_clients_programs)
+
+libexec_PROGRAMS =				\
+	$(desktop_shell)			\
+	$(tablet_shell)				\
+	$(screenshooter)
+
+if BUILD_SIMPLE_CLIENTS
+simple_clients_programs =			\
+	simple-egl				\
+	simple-shm				\
+	simple-touch
+
+simple_egl_SOURCES = simple-egl.c
+simple_egl_LDADD = $(SIMPLE_CLIENT_LIBS) -lm
+
+simple_shm_SOURCES = simple-shm.c
+simple_shm_LDADD = $(SIMPLE_CLIENT_LIBS)
+
+simple_touch_SOURCES = simple-touch.c
+simple_touch_LDADD = $(SIMPLE_CLIENT_LIBS)
+endif
+
+if BUILD_CLIENTS
+terminal = weston-terminal
+
+clients_programs =				\
+	flower					\
+	image					\
+	dnd					\
+	smoke					\
+	resizor					\
+	eventdemo				\
+	clickdot				\
+	$(full_gl_client_programs)
+
+desktop_shell = weston-desktop-shell
+tablet_shell = weston-tablet-shell
+screenshooter = weston-screenshooter
+
+noinst_LIBRARIES = libtoytoolkit.a
+
+AM_CFLAGS = $(GCC_CFLAGS)
+AM_CPPFLAGS =					\
+	-DDATADIR='"$(datadir)"'		\
+	-DBINDIR='"$(bindir)"'			\
+	$(CLIENT_CFLAGS) $(CAIRO_EGL_CFLAGS)
+
+libtoytoolkit_a_SOURCES =			\
+	window.c				\
+	window.h				\
+	cairo-util.c				\
+	cairo-util.h
+
+toolkit_libs =						\
+	libtoytoolkit.a					\
+	../shared/libconfig-parser.la			\
+	$(CLIENT_LIBS) $(CAIRO_EGL_LIBS) -lrt -lm
+
+flower_SOURCES = flower.c
+flower_LDADD = $(toolkit_libs)
+
+weston_screenshooter_SOURCES = screenshot.c screenshooter-protocol.c
+weston_screenshooter_LDADD = $(toolkit_libs)
+
+weston_terminal_SOURCES = terminal.c
+weston_terminal_LDADD = $(toolkit_libs) -lutil
+
+image_SOURCES = image.c
+image_LDADD = $(toolkit_libs)
+
+dnd_SOURCES = dnd.c
+dnd_LDADD = $(toolkit_libs)
+
+smoke_SOURCES = smoke.c
+smoke_LDADD = $(toolkit_libs)
+
+resizor_SOURCES = resizor.c
+resizor_LDADD = $(toolkit_libs)
+
+eventdemo_SOURCES = eventdemo.c
+eventdemo_LDADD = $(toolkit_libs)
+
+clickdot_SOURCES = clickdot.c
+clickdot_LDADD = $(toolkit_libs)
+
+weston_desktop_shell_SOURCES =			\
+	desktop-shell.c				\
+	desktop-shell-client-protocol.h		\
+	desktop-shell-protocol.c
+weston_desktop_shell_LDADD = $(toolkit_libs)	\
+	../shared/libconfig-parser.la
+
+weston_tablet_shell_SOURCES =			\
+	tablet-shell.c				\
+	tablet-shell-client-protocol.h		\
+	tablet-shell-protocol.c
+weston_tablet_shell_LDADD = $(toolkit_libs)	\
+	../shared/libconfig-parser.la
+
+BUILT_SOURCES =					\
+	screenshooter-client-protocol.h		\
+	screenshooter-protocol.c		\
+	desktop-shell-client-protocol.h		\
+	desktop-shell-protocol.c		\
+	tablet-shell-client-protocol.h		\
+	tablet-shell-protocol.c
+
+CLEANFILES = $(BUILT_SOURCES)
+endif
+
+if BUILD_FULL_GL_CLIENTS
+full_gl_client_programs =			\
+	gears					\
+	wscreensaver
+
+gears_SOURCES = gears.c
+gears_LDADD = $(toolkit_libs)
+
+wscreensaver_SOURCES =				\
+	wscreensaver.c				\
+	wscreensaver.h				\
+	desktop-shell-client-protocol.h		\
+	desktop-shell-protocol.c		\
+	wscreensaver-glue.c			\
+	wscreensaver-glue.h			\
+	glmatrix.c				\
+	matrix3.xpm
+wscreensaver_LDADD = $(toolkit_libs) -lGLU
+endif
+
+@wayland_scanner_rules@
+
+if HAVE_POPPLER
+poppler_programs = view
+view_SOURCES = view.c
+view_LDADD = $(toolkit_libs) $(POPPLER_LIBS)
+view_CPPFLAGS = $(AM_CPPFLAGS) $(POPPLER_CFLAGS)
+endif

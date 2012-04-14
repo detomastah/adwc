@@ -1,0 +1,6 @@
+Wayland Demos
+
+This repository contains a few demos application for the Wayland
+project.  There's a sample compositor that can run on KMS, under X11
+or under another Wayland compositor and there's a handful of simple
+clients that demonstrate various aspects of Wayland:
