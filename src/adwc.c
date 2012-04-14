@@ -3115,6 +3115,86 @@ shell_surface_resize(struct wl_client *client, struct wl_resource *resource,
 
 
 
+static void
+noop_grab_focus(struct wl_pointer_grab *grab,
+		struct wl_surface *surface, int32_t x, int32_t y)
+{
+	grab->focus = NULL;
+}
+
+static void
+swap_grab_motion(struct wl_pointer_grab *grab,
+		 uint32_t time, int32_t x, int32_t y)
+{
+	struct weston_swap_grab *move = (struct weston_swap_grab *) grab;
+	struct wl_input_device *device = grab->input_device;
+	struct shell_surface *shsurf = move->base.shsurf;
+	struct weston_surface *es;
+	
+	if (!shsurf)
+		return;
+	
+	es = shsurf->surface;
+	
+	
+//	weston_surface_configure(es,
+//				 device->x + move->dx,
+//				 device->y + move->dy,
+//				 es->geometry.width, es->geometry.height);
+}
+
+static void
+swap_grab_button(struct wl_pointer_grab *grab,
+		 uint32_t time, uint32_t button, int32_t state)
+{
+	struct shell_grab *shell_grab = container_of(grab, struct shell_grab,
+						    grab);
+	struct wl_input_device *device = grab->input_device;
+
+	if (device->button_count == 0 && state == 0) {
+		shell_grab_finish(shell_grab);
+		wl_input_device_end_pointer_grab(device);
+		free(grab);
+	}
+}
+
+static const struct wl_pointer_grab_interface move_grab_interface = {
+	noop_grab_focus,
+	swap_grab_motion,
+	swap_grab_button,
+};
+
+static int
+weston_surface_swap(struct weston_surface *es,
+		    struct weston_input_device *wd)
+{
+	struct weston_swap_grab *move;
+	struct shell_surface *shsurf = get_shell_surface(es);
+	
+	if (!shsurf)
+		return -1;
+	
+	move = malloc(sizeof *move);
+	if (!move)
+		return -1;
+	
+	shell_grab_init(&move->base, &move_grab_interface, shsurf);
+	
+	move->dx = es->geometry.x - wd->input_device.grab_x;
+	move->dy = es->geometry.y - wd->input_device.grab_y;
+	
+	wl_input_device_start_pointer_grab(&wd->input_device,
+					   &move->base.grab);
+	
+	wl_input_device_set_pointer_focus(&wd->input_device, NULL, 0, 0);
+	
+	return 0;
+}
+
+
+
+
+
 /** *********************************** shell other ************************************ **/
 
 static struct weston_output *
@@ -3819,7 +3899,7 @@ move_binding(struct wl_input_device *device, uint32_t time,
 		default:
 			break;
 	}
-
+	
 	weston_surface_move(surface, (struct weston_input_device *) device);
 }
 
