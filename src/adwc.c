@@ -3116,13 +3116,6 @@ shell_surface_resize(struct wl_client *client, struct wl_resource *resource,
 
 
 static void
-noop_grab_focus(struct wl_pointer_grab *grab,
-		struct wl_surface *surface, int32_t x, int32_t y)
-{
-	grab->focus = NULL;
-}
-
-static void
 swap_grab_motion(struct wl_pointer_grab *grab,
 		 uint32_t time, int32_t x, int32_t y)
 {
@@ -3134,9 +3127,12 @@ swap_grab_motion(struct wl_pointer_grab *grab,
 	if (!shsurf)
 		return;
 	
-	es = shsurf->surface;
+//	es = shsurf->surface;
 	
-	
+/*	es = weston_compositor_pick_surface(wd->compositor,
+						 device->x, device->y,
+						 &device->current_x,
+						 &device->current_y);/**/
 //	weston_surface_configure(es,
 //				 device->x + move->dx,
 //				 device->y + move->dy,
@@ -3158,7 +3154,7 @@ swap_grab_button(struct wl_pointer_grab *grab,
 	}
 }
 
-static const struct wl_pointer_grab_interface move_grab_interface = {
+static const struct wl_pointer_grab_interface swap_grab_interface = {
 	noop_grab_focus,
 	swap_grab_motion,
 	swap_grab_button,
@@ -3178,7 +3174,7 @@ weston_surface_swap(struct weston_surface *es,
 	if (!move)
 		return -1;
 	
-	shell_grab_init(&move->base, &move_grab_interface, shsurf);
+	shell_grab_init(&move->base, &swap_grab_interface, shsurf);
 	
 	move->dx = es->geometry.x - wd->input_device.grab_x;
 	move->dy = es->geometry.y - wd->input_device.grab_y;
