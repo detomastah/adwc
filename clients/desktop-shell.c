@@ -59,6 +59,7 @@ struct panel {
 	struct window *window;
 	struct widget *widget;
 	struct wl_list launcher_list;
+	struct wl_list tag_list;
 };
 
 struct background {
@@ -82,6 +83,18 @@ struct panel_launcher {
 	int focused, pressed;
 	const char *path;
 	struct wl_list link;
+};
+
+struct panel_tag {
+	struct widget *widget;
+	struct panel *panel;
+	cairo_surface_t *icon;
+	int focused, pressed;
+	int tag_no;
+	struct wl_list link;
+	int font_size;
+	
+	struct desktop *desktop;
 };
 
 struct unlock_dialog {
@@ -173,7 +186,23 @@ panel_launcher_activate(struct panel_launcher *widget)
 		exit(1);
 	}
 }
-
+/*
+	cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+	cairo_select_font_face(cr, "sans",
+			       CAIRO_FONT_SLANT_NORMAL,
+			       CAIRO_FONT_WEIGHT_BOLD);
+	cairo_set_font_size(cr, 14);
+	cairo_text_extents(cr, window->title, &extents);
+	x = (width - extents.width) / 2;
+	y = frame->margin + 8 - extents.y_bearing;
+	if (window->keyboard_device) {
+		cairo_move_to(cr, x + 1, y  + 1);
+		cairo_set_source_rgb(cr, 1, 1, 1);
+		cairo_show_text(cr, window->title);
+		cairo_move_to(cr, x, y);
+		cairo_set_source_rgb(cr, 0, 0, 0);
+		cairo_show_text(cr, window->title); 
+ */
 static void
 panel_launcher_redraw_handler(struct widget *widget, void *data)
 {
@@ -201,6 +230,40 @@ panel_launcher_redraw_handler(struct widget *widget, void *data)
 				   allocation.x, allocation.y);
 	}
 
+	cairo_destroy(cr);
+}
+
+static void
+panel_tag_redraw_handler(struct widget *widget, void *data)
+{
+	struct panel_tag *tag = data;
+	cairo_text_extents_t extents;
+	cairo_surface_t *surface;
+	struct rectangle allocation;
+	cairo_t *cr;
+	
+	surface = window_get_surface(tag->panel->window);
+	cr = cairo_create(surface);
+	widget_get_allocation(widget, &allocation);
+
+	cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+	cairo_select_font_face(cr, "sans",
+			       CAIRO_FONT_SLANT_NORMAL,
+			       CAIRO_FONT_WEIGHT_BOLD);
+	cairo_set_font_size(cr, tag->font_size);
+	cairo_text_extents(cr, "1", &extents);
+	int x = 0;
+	int y = 0;
+	cairo_move_to(cr, allocation.x, 26);
+	if (tag->focused)
+		cairo_set_source_rgba(cr, 0.5, 1, 1, 1);
+	else
+		cairo_set_source_rgba(cr, 1, 0.5, 1, 1);
+	
+	cairo_show_text(cr, "1"); 
+	//cairo_set_source_surface(cr, launcher->icon, allocation.x, allocation.y);
+	//cairo_paint(cr);
+	
 	cairo_destroy(cr);
 }
 
@@ -243,6 +306,19 @@ panel_launcher_enter_handler(struct widget *widget, struct input *input,
 	return POINTER_LEFT_PTR;
 }
 
+static int
+panel_tag_enter_handler(struct widget *widget, struct input *input,
+			     int32_t x, int32_t y, void *data)
+{
+	
+	struct panel_tag *tag = data;
+
+	tag->focused = 1;
+	widget_schedule_redraw(widget);
+	
+	return POINTER_LEFT_PTR;
+}
+
 static void
 panel_launcher_leave_handler(struct widget *widget,
 			     struct input *input, void *data)
@@ -251,6 +327,17 @@ panel_launcher_leave_handler(struct widget *widget,
 
 	launcher->focused = 0;
 	widget_schedule_redraw(widget);
+}
+
+static void
+panel_tag_leave_handler(struct widget *widget,
+			     struct input *input, void *data)
+{
+	struct panel_tag *tag = data;
+
+	tag->focused = 0;
+	widget_schedule_redraw(widget);
+
 }
 
 static void
@@ -264,6 +351,19 @@ panel_launcher_button_handler(struct widget *widget,
 	widget_schedule_redraw(widget);
 	if (state == 0)
 		panel_launcher_activate(launcher);
+}
+
+static void
+panel_tag_button_handler(struct widget *widget,
+			      struct input *input, uint32_t time,
+			      int button, int state, void *data)
+{
+	struct panel_tag *tag = data;
+
+	widget_schedule_redraw(widget);
+	if (state == 0)
+		desktop_shell_select_tag(tag->desktop->shell, tag->tag_no);
+
 }
 
 static void
@@ -282,6 +382,7 @@ panel_resize_handler(struct widget *widget,
 		     int32_t width, int32_t height, void *data)
 {
 	struct panel_launcher *launcher;
+	struct panel_tag *tag;
 	struct panel *panel = data;
 	int x, y, w, h;
 	
@@ -293,6 +394,11 @@ panel_resize_handler(struct widget *widget,
 		widget_set_allocation(launcher->widget,
 				      x, y - h / 2, w + 1, h + 1);
 		x += w + 10;
+	}
+	wl_list_for_each(tag, &panel->tag_list, link) {
+		widget_set_allocation(tag->widget,
+				      x, y - tag->font_size / 2, tag->font_size + 1, tag->font_size + 1);
+		x += tag->font_size / 2 + 10;
 	}
 }
 
@@ -320,6 +426,7 @@ panel_create(struct display *display)
 	panel->window = window_create(display);
 	panel->widget = window_add_widget(panel->window, panel);
 	wl_list_init(&panel->launcher_list);
+	wl_list_init(&panel->tag_list);
 
 	window_set_title(panel->window, "panel");
 	window_set_custom(panel->window);
@@ -353,6 +460,35 @@ panel_add_launcher(struct panel *panel, const char *icon, const char *path)
 				    panel_launcher_button_handler);
 	widget_set_redraw_handler(launcher->widget,
 				  panel_launcher_redraw_handler);
+}
+
+static void
+panel_add_tag(struct panel *panel, struct desktop *desktop, int tag_no)
+{
+	struct panel_tag *tag;
+
+	tag = malloc(sizeof *tag);
+	memset(tag, 0, sizeof *tag);
+	
+	wl_list_insert(panel->tag_list.prev, &tag->link);
+
+	tag->widget = widget_add_widget(panel->widget, tag);
+	tag->tag_no = tag_no;
+	tag->font_size = 24;
+	tag->panel = panel;
+	tag->desktop = desktop;
+	
+	widget_set_enter_handler(tag->widget,
+				 panel_tag_enter_handler);
+	widget_set_leave_handler(tag->widget,
+				   panel_tag_leave_handler);
+	widget_set_button_handler(tag->widget,
+				    panel_tag_button_handler);
+				    
+	widget_set_redraw_handler(tag->widget,
+				  panel_tag_redraw_handler);
+				  
+    puts("ADDED");
 }
 
 enum {
@@ -689,9 +825,23 @@ add_default_launcher(struct desktop *desktop)
 	struct output *output;
 
 	wl_list_for_each(output, &desktop->outputs, link)
+	{
 		panel_add_launcher(output->panel,
 				   DATADIR "/weston/terminal.png",
-				   BINDIR "/weston-terminal");
+				   BINDIR "/weston-terminal");			   
+    }
+}
+
+static void
+add_default_tags(struct desktop *desktop)
+{
+	struct output *output;
+
+	wl_list_for_each(output, &desktop->outputs, link)
+	{
+		panel_add_tag(output->panel, desktop, 1);
+		panel_add_tag(output->panel, desktop,2);
+    }
 }
 
 int main(int argc, char *argv[])
@@ -731,7 +881,10 @@ int main(int argc, char *argv[])
 				&desktop);
 	free(config_file);
 	if (ret < 0)
+	{
 		add_default_launcher(&desktop);
+		add_default_tags(&desktop);
+	}
 
 	signal(SIGCHLD, sigchild_handler);
 

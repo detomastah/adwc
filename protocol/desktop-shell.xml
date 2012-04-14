@@ -16,6 +16,10 @@
     </request>
 
     <request name="unlock"/>
+    
+	<request name="select_tag">
+		<arg name="tag" type="uint"></arg>
+    </request>
 
     <!-- We'll fold most of wl_shell into this interface and then
          they'll share the configure event.  -->
