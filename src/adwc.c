@@ -3802,11 +3802,20 @@ desktop_shell_unlock(struct wl_client *client,
 		resume_desktop(shell);
 }
 
+static void
+desktop_shell_select_tag(struct wl_client *client,
+			   struct wl_resource *resource,
+			   uint32_t tag_no)
+{
+	printf("Tag No: %x\n", tag_no);
+}
+
 static const struct desktop_shell_interface desktop_shell_implementation = {
 	desktop_shell_set_background,
 	desktop_shell_set_panel,
 	desktop_shell_set_lock_surface,
-	desktop_shell_unlock
+	desktop_shell_unlock,
+	desktop_shell_select_tag
 };
 
 static enum shell_surface_type
