@@ -3065,6 +3065,7 @@ static void
 swap_grab_motion(struct wl_pointer_grab *grab,
 		 uint32_t time, int32_t x, int32_t y)
 {
+	dTrace_E ("xy %d %d\n", x, y);
 	struct weston_swap_grab *move = (struct weston_swap_grab *) grab;
 	struct wl_input_device *device = grab->input_device;
 	struct shell_surface *shsurf = move->base.shsurf;
@@ -3074,11 +3075,20 @@ swap_grab_motion(struct wl_pointer_grab *grab,
 		return;
 	
 //	es = shsurf->surface;
-	
-/*	es = weston_compositor_pick_surface(wd->compositor,
+	int32_t sx = device->x, sy = device->y;
+	es = weston_compositor_pick_surface(gShell.compositor,
 						 device->x, device->y,
-						 &device->current_x,
-						 &device->current_y);/**/
+						 &sx,
+						 &sy);/**/
+	if (!es)
+		return;
+	
+	if (es != shsurf->surface) {
+		printf ("YAAAAAAAAAAAAAAAAAAAAAAAAAAYYYYYY\n");
+	}else {
+		printf ("YAAAAAAAAAAAAAAAAAAAAAAAAAAYYYYYY NO\n");
+		
+	}
 //	weston_surface_configure(es,
 //				 device->x + move->dx,
 //				 device->y + move->dy,
@@ -3851,7 +3861,7 @@ move_binding(struct wl_input_device *device, uint32_t time,
 			break;
 	}
 	
-	weston_surface_move(surface, (struct weston_input_device *) device);
+	weston_surface_swap(surface, (struct weston_input_device *) device);
 }
 
 static void
