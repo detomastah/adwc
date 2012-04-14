@@ -69,6 +69,7 @@
 #include <signal.h>
 #include <setjmp.h>
 #include <execinfo.h>
+#include <time.h>
 
 #include <wayland-server.h>
 //#include "compositor.h"
@@ -80,7 +81,6 @@
 
 static struct wl_list child_process_list;
 static jmp_buf segv_jmp_buf;
-
 
 
 
@@ -294,6 +294,7 @@ empty_region(pixman_region32_t *region)
 WL_EXPORT struct weston_surface *
 weston_surface_create(struct weston_compositor *compositor)
 {
+	dTrace_E("");
 	struct weston_surface *surface;
 
 	surface = calloc(1, sizeof *surface);
@@ -331,7 +332,7 @@ weston_surface_create(struct weston_compositor *compositor)
 //	weston_matrix_init(&surface->transform.position.matrix);
 //	pixman_region32_init(&surface->transform.boundingbox);
 	surface->geometry.dirty = 1;
-
+	dTrace_L("");
 	return surface;
 }
 
@@ -1421,6 +1422,7 @@ static void
 compositor_create_surface(struct wl_client *client,
 			  struct wl_resource *resource, uint32_t id)
 {
+	dTrace_E("");
 	struct weston_compositor *ec = resource->data;
 	struct weston_surface *surface;
 
@@ -1439,6 +1441,7 @@ compositor_create_surface(struct wl_client *client,
 	surface->surface.resource.data = surface;
 
 	wl_client_add_resource(client, &surface->surface.resource);
+	dTrace_L("");
 }
 
 static void
@@ -4153,19 +4156,43 @@ static void		activate		(struct wl_shell *shell, struct weston_surface *es, struc
 	}
 }
 
+void shell_L_print(struct wl_shell *shell)
+{
+	puts("Printing all shell surfaces");
+	struct shell_surface *shsurf;
+	int i;
+	for (i=0; i<L_NUM; i++) {
+		wl_list_for_each(shsurf, &shell->L[i], L_link) {
+			printf("%d: %d %d %d %d %x\n", 
+				i,
+				shsurf->surface->geometry.x,
+				shsurf->surface->geometry.y,
+				shsurf->surface->geometry.width,
+				shsurf->surface->geometry.height,
+				shsurf->Tags
+			);
+		}
+	}
+}
+
 
 static void		map			(struct wl_shell *shell, struct weston_surface *surface, int32_t width, int32_t height, int32_t sx, int32_t sy)
 {
+	dTrace_E("");
 	struct weston_compositor *compositor = shell->compositor;
 	struct shell_surface *shsurf;
 	enum shell_surface_type surface_type = SHELL_SURFACE_NONE;
 	struct weston_surface *parent;
 	int panel_height = 0;
+	
+	shell_L_print(shell);
 
 	shsurf = get_shell_surface(surface);
 	if (shsurf) {
 		surface_type = shsurf->type;
-		shsurf->Tags = 1;
+		static int Linc = 1;
+		shsurf->Tags = Linc;
+		Linc <<= 1;
 	}
 	surface->geometry.width = width;
 	surface->geometry.height = height;
@@ -4264,6 +4291,7 @@ static void		map			(struct wl_shell *shell, struct weston_surface *surface, int3
 	default:
 		break;
 	}
+	dTrace_L("");
 
 //	if (surface_type == SHELL_SURFACE_TOPLEVEL)
 //		weston_zoom_run(surface, 0.8, 1.0, NULL, NULL);
@@ -4350,6 +4378,7 @@ shell_get_shell_surface(struct wl_client *client,
 			uint32_t id,
 			struct wl_resource *surface_resource)
 {
+	dTrace_E("");
 	struct weston_surface *surface = surface_resource->data;
 	struct shell_surface *shsurf;
 
@@ -4402,8 +4431,17 @@ shell_get_shell_surface(struct wl_client *client,
 //	weston_matrix_init(&shsurf->rotation.rotation);
 
 	shsurf->type = SHELL_SURFACE_NONE;
+	
+	wl_list_insert(&gShell.L[L_eNorm], &shsurf->L_link);
+	
+	
+	
+	
+	shsurf->Tags = 0;
+	puts("WLIST INIT");
 
 	wl_client_add_resource(client, &shsurf->resource);
+	dTrace_L("");
 }
 
 
@@ -4848,7 +4886,7 @@ static void		Act_Output_TagSet		(struct wl_input_device *device, uint32_t time, 
 {
 	struct weston_output* out = CurrentOutput ();
 	out->Tags = data;
-	
+	shell_restack();
 	printf ("Output_TagSet %x\n", out->Tags);
 	
 }
@@ -4860,6 +4898,30 @@ static void		Act_Output_TagSet		(struct wl_input_device *device, uint32_t time, 
 
 
 /** *********************************** shell main ************************************ **/
+
+
+void shell_restack()
+{
+	dTrace_E("");
+//	wl_list_init(&gShell.compositor->surface_list);
+	shell_L_print (&gShell);
+	struct weston_output *output, *tmp_output;
+	struct shell_surface *surface;
+	wl_list_for_each(output, &gShell.compositor->output_list, link) {
+		wl_list_for_each(surface, &gShell.L[L_eNorm], L_link) {
+			
+		//	if (surface->Tags & output->Tags) {
+		//		printf("TAG: %x\n", surface->Tags);
+				//wl_list_insert(&gShell.compositor->surface_list, &surface->surface->link);
+		//	} else {
+				if (weston_surface_is_mapped(surface->surface)) {
+					weston_surface_unmap(surface->surface);
+				}
+		//	}
+		}
+	}
+	weston_compositor_damage_all(gShell.compositor);
+}
 
 static void
 backlight_binding(struct wl_input_device *device, uint32_t time,
@@ -4955,7 +5017,10 @@ shell_init(struct weston_compositor *ec)
 
 	memset(shell, 0, sizeof *shell);
 	shell->compositor = ec;
-
+	int i;
+	for (i=0; i<L_NUM; i++) {
+		wl_list_init(&shell->L[i]);
+	}
 	shell->destroy_listener.notify = shell_destroy;
 	wl_signal_add(&ec->destroy_signal, &shell->destroy_listener);
 	shell->lock_listener.notify = lock;

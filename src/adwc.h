@@ -363,6 +363,14 @@ struct weston_surface {
 struct shell_surface;
 
 
+enum {
+	L_eBelow,
+	L_eNorm,
+	L_eFloat,
+	L_eAbove,
+	L_NUM
+};
+
 struct wl_shell {
 	struct weston_compositor *compositor;
 
@@ -377,7 +385,6 @@ struct wl_shell {
 	struct weston_layer lock_layer;
 	
 //	struct weston_layer lock_layer;
-	
 	
 	struct {
 		struct weston_process process;
@@ -396,7 +403,7 @@ struct wl_shell {
 
 	struct wl_list backgrounds;
 	struct wl_list panels;
-
+	
 	struct {
 		char *path;
 		int duration;
@@ -406,6 +413,9 @@ struct wl_shell {
 	} screensaver;
 
 	struct weston_surface *debug_repaint_surface;
+	
+	struct wl_list L[L_NUM];	//array with lists of windows
+	
 };
 
 enum shell_surface_type {
@@ -463,6 +473,7 @@ struct shell_surface {
 	
 	
 	tTags Tags;
+	struct wl_list L_link;
 };
 
 struct shell_grab {
