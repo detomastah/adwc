@@ -649,10 +649,10 @@ weston_compositor_pick_surface(struct weston_compositor *compositor,
 			       int32_t x, int32_t y, int32_t *sx, int32_t *sy)
 {
 	struct weston_surface *surface;
-	dTrace_E("");
+	//dTrace_E("");
 	
 	wl_list_for_each(surface, &compositor->surface_list, link) {
-		printf ("weston_compositor_pick_surface %d %d\n", surface->geometry.x, surface->geometry.y);
+	//	printf ("weston_compositor_pick_surface %d %d\n", surface->geometry.x, surface->geometry.y);
 		weston_surface_from_global(surface, x, y, sx, sy);
 		if (pixman_region32_contains_point(&surface->input,
 						   *sx, *sy, NULL))
@@ -2449,6 +2449,7 @@ weston_output_init(struct weston_output *output, struct weston_compositor *c,
 				      output, bind_output);
 	
 	output->Tags = 1;
+        wl_list_init(&output->surfaces);
 }
 
 static void
@@ -4181,7 +4182,8 @@ static void		map			(struct wl_shell *shell, struct weston_surface *surface, int3
 	if (shsurf) {
 		surface_type = shsurf->type;
 		static int Linc = 1;
-		shsurf->Tags = Linc;
+		//shsurf->Tags = Linc;
+                shsurf->Tags = 1;
 		Linc <<= 1;
 	}
 	surface->geometry.width = width;
@@ -4335,7 +4337,6 @@ static void		configure		(struct wl_shell *shell, struct weston_surface *surface,
 		else if (surface_type == SHELL_SURFACE_MAXIMIZED)
 			surface->output = shsurf->output;
 	}
-	shell_restack();
 	
 }
 
@@ -4432,6 +4433,7 @@ shell_get_shell_surface(struct wl_client *client,
 	
 	
 	shsurf->Tags = 0;
+        wl_list_init(&shsurf->O_link);
 	puts("WLIST INIT");
 
 	wl_client_add_resource(client, &shsurf->resource);
@@ -4907,6 +4909,52 @@ static void		Act_Output_TagSet		(struct wl_input_device *device, uint32_t time, 
 
 /** *********************************** shell main ************************************ **/
 
+void layout(struct weston_output* output) {
+	unsigned int n, cols, rows, cn, rn, i, cx, cy, cw, ch, mw, mh, mx, my;
+	struct shell_surface* c;
+
+        mw = output->mm_width;
+        mh = output->mm_height;
+        mx = output->x;
+        my = output->y;
+        printf("mw:%d mh:%d mx:%d my:%d\n", mw, mh, mx, my);
+
+        n = wl_list_length(&output->surfaces);
+	if(n == 0)
+		return;
+
+	/* grid dimensions */
+	for(cols = 0; cols <= n/2; cols++)
+		if(cols*cols >= n)
+			break;
+	if(n == 5) /* set layout against the general calculation: not 1:2:2, but 2:3 */
+		cols = 2;
+	rows = n/cols;
+
+	/* window geometries */
+	cw = cols ? mw / cols : mw;
+	cn = 0; /* current column number */
+	rn = 0; /* current row number */
+        i = 0; 
+	wl_list_for_each(c, &output->surfaces, O_link) {
+		if(i/rows + 1 > cols - n%cols)
+			rows = n/cols + 1;
+		ch = rows ? mh / rows : mh;
+		cx = mx + cn*cw;
+		cy = my + rn*ch;
+		//resize(c, cx, cy, cw, ch, False);
+                printf("x:%d y:%d w:%d h:%d", cx, cy, cw, ch);
+                struct weston_surface* es = c->surface;
+                weston_surface_configure(es, cx, cy, cw, ch);
+                wl_shell_surface_send_configure(&c->resource, 0, cw, ch);
+		rn++;
+		if(rn >= rows) {
+			rn = 0;
+			cn++;
+		}
+                i++;
+	}
+}
 
 void shell_restack()
 {
@@ -4921,6 +4969,7 @@ void shell_restack()
 	
 	wl_list_for_each(output, &gShell.compositor->output_list, link) {
 		printf("output TAG: %lx\n", output->Tags);
+                wl_list_init(&output->surfaces);
 	}
 	
 	
@@ -4945,6 +4994,7 @@ void shell_restack()
 			if (shsurf->Tags & output->Tags) {
 				printf("surf TAG: %x\n", shsurf->Tags);
 				wl_list_insert(&gShell.compositor->surface_list, &shsurf->surface->link);
+                                wl_list_insert(&output->surfaces, &shsurf->O_link);
 				break;
 			}else {
 				//if (weston_surface_is_mapped(surface->surface)) {
@@ -4960,6 +5010,9 @@ void shell_restack()
 		wl_list_insert(&gShell.compositor->surface_list, &wid->sprite->link);
 	//	weston_surface_assign_output(wid->sprite);
 	}*/
+        wl_list_for_each(output, &gShell.compositor->output_list, link) {
+          layout(output);
+        }
 	
 	weston_compositor_damage_all(gShell.compositor);
 	dTrace_L("");

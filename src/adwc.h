@@ -142,6 +142,8 @@ struct weston_output {
 	
 	
 	tTags Tags;
+
+        struct wl_list surfaces;
 };
 
 struct weston_input_device {
@@ -497,6 +499,7 @@ struct shell_surface {
 	
 	tTags Tags;
 	struct wl_list L_link;
+        struct wl_list O_link;
 };
 
 struct shell_grab {
