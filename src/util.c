@@ -28,7 +28,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "compositor.h"
+#include "adwc.h"
 /*
 WL_EXPORT void
 weston_spring_init(struct weston_spring *spring,

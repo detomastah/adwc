@@ -33,7 +33,7 @@
 
 #include <xf86drm.h>
 
-#include "compositor.h"
+#include "adwc.h"
 #include "launcher-util.h"
 #include "weston-launch.h"
 

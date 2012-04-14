@@ -25,6 +25,28 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <limits.h>
+#include <stdarg.h>
+#include <assert.h>
+#include <sys/ioctl.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <math.h>
+#include <linux/input.h>
+#include <dlfcn.h>
+#include <signal.h>
+#include <setjmp.h>
+#include <execinfo.h>
+#include <time.h>
+
 #include <libudev.h>
 #include <pixman.h>
 #include <wayland-server.h>
@@ -120,6 +142,8 @@ struct weston_output {
 	
 	
 	tTags Tags;
+
+        struct wl_list surfaces;
 };
 
 struct weston_input_device {
@@ -363,6 +387,14 @@ struct weston_surface {
 struct shell_surface;
 
 
+enum {
+	L_eBelow,
+	L_eNorm,
+	L_eFloat,
+	L_eAbove,
+	L_NUM
+};
+
 struct wl_shell {
 	struct weston_compositor *compositor;
 
@@ -377,7 +409,6 @@ struct wl_shell {
 	struct weston_layer lock_layer;
 	
 //	struct weston_layer lock_layer;
-	
 	
 	struct {
 		struct weston_process process;
@@ -396,7 +427,7 @@ struct wl_shell {
 
 	struct wl_list backgrounds;
 	struct wl_list panels;
-
+	
 	struct {
 		char *path;
 		int duration;
@@ -406,7 +437,11 @@ struct wl_shell {
 	} screensaver;
 
 	struct weston_surface *debug_repaint_surface;
+	
+	struct wl_list L[L_NUM];	//array with lists of windows
+	
 };
+extern struct wl_shell gShell;
 
 enum shell_surface_type {
 	SHELL_SURFACE_NONE,
@@ -463,6 +498,8 @@ struct shell_surface {
 	
 	
 	tTags Tags;
+	struct wl_list L_link;
+        struct wl_list O_link;
 };
 
 struct shell_grab {

@@ -34,7 +34,7 @@
 
 #include <gbm.h>
 
-#include "compositor.h"
+#include "adwc.h"
 #include "evdev.h"
 
 struct wfd_compositor {

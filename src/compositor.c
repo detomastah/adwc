@@ -47,7 +47,7 @@
 #include <execinfo.h>
 
 #include <wayland-server.h>
-#include "compositor.h"
+#include "adwc.h"
 
 static struct wl_list child_process_list;
 static jmp_buf segv_jmp_buf;

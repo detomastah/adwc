@@ -28,7 +28,7 @@
 #include <fcntl.h>
 #include <mtdev.h>
 
-#include "compositor.h"
+#include "adwc.h"
 #include "evdev.h"
 #include "launcher-util.h"
 

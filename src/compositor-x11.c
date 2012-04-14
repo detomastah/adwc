@@ -42,7 +42,7 @@
 #include <GLES2/gl2.h>
 #include <EGL/egl.h>
 
-#include "compositor.h"
+#include "adwc.h"
 #include "../shared/config-parser.h"
 
 struct x11_compositor {
@@ -198,6 +198,7 @@ static void
 x11_output_repaint(struct weston_output *output_base,
 		   pixman_region32_t *damage)
 {
+//	printf ("x11_output_repaint\n");
 	struct x11_output *output = (struct x11_output *)output_base;
 	struct x11_compositor *compositor =
 		(struct x11_compositor *)output->base.compositor;
@@ -211,7 +212,11 @@ x11_output_repaint(struct weston_output *output_base,
 
 	wl_list_for_each_reverse(surface, &compositor->base.surface_list, link)
 		weston_surface_draw(surface, &output->base, damage);
-
+	{
+		struct weston_input_device* wid;
+		wl_list_for_each_reverse(wid, &compositor->base.input_device_list, link)
+			weston_surface_draw(wid->sprite, &output->base, damage);
+	}
 	eglSwapBuffers(compositor->base.display, output->egl_surface);
 
 	wl_event_source_timer_update(output->finish_frame_timer, 10);
@@ -483,6 +488,7 @@ x11_compositor_find_output(struct x11_compositor *c, xcb_window_t window)
 	struct x11_output *output;
 
 	wl_list_for_each(output, &c->base.output_list, base.link) {
+	//	printf ("x11_compositor_find_output %lx\n", output);
 		if (output->window == window)
 			return output;
 	}
@@ -643,10 +649,13 @@ x11_compositor_handle_event(int fd, uint32_t mask, void *data)
 		case XCB_MOTION_NOTIFY:
 			motion_notify = (xcb_motion_notify_event_t *) event;
 			output = x11_compositor_find_output(c, motion_notify->event);
+		//	printf ("output %lx\n", output);
+			
 			notify_motion(c->base.input_device,
-				      weston_compositor_get_time(),
-				      output->base.x + motion_notify->event_x,
-				      output->base.y + motion_notify->event_y);
+					weston_compositor_get_time(),
+					output->base.x + motion_notify->event_x,
+					output->base.y + motion_notify->event_y);
+			
 			break;
 
 		case XCB_EXPOSE:

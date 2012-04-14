@@ -23,7 +23,7 @@
 #ifndef _WESTON_LAUNCHER_UTIL_H_
 #define _WESTON_LAUNCHER_UTIL_H_
 
-#include "compositor.h"
+#include "adwc.h"
 
 int
 weston_launcher_open(struct weston_compositor *compositor,
