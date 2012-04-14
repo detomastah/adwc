@@ -1068,6 +1068,7 @@ weston_output_repaint(struct weston_output *output, int msecs)
 	glViewport(0, 0, width, height);
 
 	/* Rebuild the surface list and update surface transforms up front. */
+	/*
 	wl_list_init(&ec->surface_list);
 	wl_list_for_each(layer, &ec->layer_list, link) {
 		wl_list_for_each(es, &layer->surface_list, layer_link) {
@@ -1075,7 +1076,9 @@ weston_output_repaint(struct weston_output *output, int msecs)
 			wl_list_insert(ec->surface_list.prev, &es->link);
 		}
 	}
-
+	*/
+	
+	
 	if (output->assign_planes)
 		/*
 		 * This will queue flips for the fbs and sprites where
@@ -4884,10 +4887,11 @@ static struct weston_output*	CurrentOutput	()
 
 static void		Act_Output_TagSet		(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
 {
-	struct weston_output* out = CurrentOutput ();
+	//struct weston_output* out = CurrentOutput();
+	struct weston_output* out = container_of(gShell.compositor->output_list.next, struct weston_output, link);
 	out->Tags = data;
 	shell_restack();
-	printf ("Output_TagSet %x\n", out->Tags);
+	printf ("Output_TagSet %lx\n", out->Tags);
 	
 }
 
@@ -4903,23 +4907,29 @@ static void		Act_Output_TagSet		(struct wl_input_device *device, uint32_t time, 
 void shell_restack()
 {
 	dTrace_E("");
-//	wl_list_init(&gShell.compositor->surface_list);
+	wl_list_init(&gShell.compositor->surface_list);
+	
+	wl_list_insert(&gShell.compositor->surface_list, &surface->surface->link);
+	
 	shell_L_print (&gShell);
 	struct weston_output *output, *tmp_output;
 	struct shell_surface *surface;
-	wl_list_for_each(output, &gShell.compositor->output_list, link) {
-		wl_list_for_each(surface, &gShell.L[L_eNorm], L_link) {
-			
-		//	if (surface->Tags & output->Tags) {
-		//		printf("TAG: %x\n", surface->Tags);
-				//wl_list_insert(&gShell.compositor->surface_list, &surface->surface->link);
-		//	} else {
-				if (weston_surface_is_mapped(surface->surface)) {
-					weston_surface_unmap(surface->surface);
+	wl_list_for_each(surface, &gShell.L[L_eNorm], L_link) {
+		wl_list_for_each(output, &gShell.compositor->output_list, link) {
+			printf("output TAG: %lx\n", output->Tags);
+				
+				if (surface->Tags & output->Tags) {
+					printf("TAG: %x\n", surface->Tags);
+					wl_list_insert(&gShell.compositor->surface_list, &surface->surface->link);
+					break;
+				}else {
+					//if (weston_surface_is_mapped(surface->surface)) {
+					//	weston_surface_unmap(surface->surface);
+					//}
 				}
-		//	}
+			}
 		}
-	}
+	
 	weston_compositor_damage_all(gShell.compositor);
 }
 
@@ -5095,6 +5105,12 @@ shell_init(struct weston_compositor *ec)
 	
 	weston_compositor_add_binding(ec, KEY_A, 0, 0, dModKey, Act_Output_TagSet, 1 << 0);
 	weston_compositor_add_binding(ec, KEY_S, 0, 0, dModKey, Act_Output_TagSet, 1 << 1);
+	weston_compositor_add_binding(ec, KEY_D, 0, 0, dModKey, Act_Output_TagSet, 1 << 2);
+	weston_compositor_add_binding(ec, KEY_F, 0, 0, dModKey, Act_Output_TagSet, 1 << 3);
+	weston_compositor_add_binding(ec, KEY_G, 0, 0, dModKey, Act_Output_TagSet, 1 << 4);
+	weston_compositor_add_binding(ec, KEY_H, 0, 0, dModKey, Act_Output_TagSet, 1 << 5);
+	weston_compositor_add_binding(ec, KEY_J, 0, 0, dModKey, Act_Output_TagSet, 1 << 6);
+	weston_compositor_add_binding(ec, KEY_K, 0, 0, dModKey, Act_Output_TagSet, 1 << 7);
 	
 	
 	return 0;
