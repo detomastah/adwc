@@ -40,7 +40,7 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 
-#include "compositor.h"
+#include "adwc.h"
 
 struct wayland_compositor {
 	struct weston_compositor	 base;

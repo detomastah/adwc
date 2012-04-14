@@ -25,6 +25,28 @@
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <limits.h>
+#include <stdarg.h>
+#include <assert.h>
+#include <sys/ioctl.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <math.h>
+#include <linux/input.h>
+#include <dlfcn.h>
+#include <signal.h>
+#include <setjmp.h>
+#include <execinfo.h>
+#include <time.h>
+
 #include <libudev.h>
 #include <pixman.h>
 #include <wayland-server.h>

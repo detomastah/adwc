@@ -37,7 +37,7 @@
 
 #include <wayland-server.h>
 
-#include "compositor.h"
+#include "adwc.h"
 #include "xserver-server-protocol.h"
 #include "hash.h"
 
