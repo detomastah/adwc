@@ -439,6 +439,7 @@ struct wl_shell {
 	struct wl_list L[L_NUM];	//array with lists of windows
 	
 };
+extern struct wl_shell gShell;
 
 enum shell_surface_type {
 	SHELL_SURFACE_NONE,

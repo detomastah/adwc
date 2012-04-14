@@ -649,8 +649,10 @@ weston_compositor_pick_surface(struct weston_compositor *compositor,
 			       int32_t x, int32_t y, int32_t *sx, int32_t *sy)
 {
 	struct weston_surface *surface;
-
+//	dTrace_E("");
+	
 	wl_list_for_each(surface, &compositor->surface_list, link) {
+	//	printf ("weston_compositor_pick_surface %d %d\n", surface->geometry.x, surface->geometry.y);
 		weston_surface_from_global(surface, x, y, sx, sy);
 		if (pixman_region32_contains_point(&surface->input,
 						   *sx, *sy, NULL))
@@ -1991,7 +1993,7 @@ input_device_attach(struct wl_client *client,
 		    uint32_t serial,
 		    struct wl_resource *buffer_resource, int32_t x, int32_t y)
 {
-	dTrace_E("");
+//	dTrace_E("");
 	struct weston_input_device *device = resource->data;
 	struct weston_compositor *compositor = device->compositor;
 	struct wl_buffer *buffer = NULL;
@@ -2006,16 +2008,19 @@ input_device_attach(struct wl_client *client,
 	if (buffer_resource)
 		buffer = buffer_resource->data;
 
+//	printf ("!!!!!!!!!!!! input_device_attach buffer %lx\n", buffer);
 	weston_surface_attach(&device->sprite->surface, buffer);
 
 	if (!buffer)
 		return;
 
-	if (!weston_surface_is_mapped(device->sprite)) {
-		wl_list_insert(&compositor->cursor_layer.surface_list,
-			       &device->sprite->layer_link);
+//	if (!weston_surface_is_mapped(device->sprite)) {
+	//	wl_list_insert(&compositor->cursor_layer.surface_list,
+	//		       &device->sprite->layer_link);
 		weston_surface_assign_output(device->sprite);
-	}
+	//	device->sprite->output = container_of(gShell.compositor->output_list.next, struct weston_output, link);
+		printf ("!!!!!!!!!!!! input_device_attach %lx\n", device->sprite->output);
+//	}
 
 
 	device->hotspot_x = x;
@@ -4278,6 +4283,8 @@ static void		map			(struct wl_shell *shell, struct weston_surface *surface, int3
 	}
 	dTrace_L("");
 
+	shell_restack();
+	
 //	if (surface_type == SHELL_SURFACE_TOPLEVEL)
 //		weston_zoom_run(surface, 0.8, 1.0, NULL, NULL);
 }
@@ -4328,6 +4335,8 @@ static void		configure		(struct wl_shell *shell, struct weston_surface *surface,
 		else if (surface_type == SHELL_SURFACE_MAXIMIZED)
 			surface->output = shsurf->output;
 	}
+	shell_restack();
+	
 }
 
 
@@ -4840,6 +4849,8 @@ switcher_binding(struct wl_input_device *device, uint32_t time,
 
 static struct weston_output*	CurrentOutput	()
 {
+	struct weston_output* out = container_of(gShell.compositor->output_list.next, struct weston_output, link);
+	return out;
 /*	struct weston_layer *layer;
 	wl_list_for_each(layer, &gShell->compositor->cursor_layer, link) {
 		struct weston_surface *es;
@@ -4868,18 +4879,20 @@ static struct weston_output*	CurrentOutput	()
 
 static void		Act_Client_TagSet		(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
 {
-//	struct weston_output* out = CurrentOutput();
-	struct weston_output* out = container_of(gShell.compositor->output_list.next, struct weston_output, link);
-	out->Tags = data;
+	struct weston_surface* surf = gShell.compositor->input_device->current;
+	printf ("Act_Client_TagSet surf %lx\n", surf);
+	if (!surf)
+		return;
+	
+	struct shell_surface* shsurf = get_shell_surface(surf);
+	shsurf->Tags = data;
 	shell_restack();
-	printf ("Output_TagSet %lx\n", out->Tags);
 	
 }
 
 static void		Act_Output_TagSet		(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
 {
-//	struct weston_output* out = CurrentOutput();
-	struct weston_output* out = container_of(gShell.compositor->output_list.next, struct weston_output, link);
+	struct weston_output* out = CurrentOutput();
 	out->Tags = data;
 	shell_restack();
 	printf ("Output_TagSet %lx\n", out->Tags);
@@ -5134,7 +5147,13 @@ shell_init(struct weston_compositor *ec)
 	weston_compositor_add_binding(ec, KEY_A, 0, 0, dModKey | MODIFIER_CTRL, Act_Client_TagSet, 1 << 0);
 	weston_compositor_add_binding(ec, KEY_S, 0, 0, dModKey | MODIFIER_CTRL, Act_Client_TagSet, 1 << 1);
 	weston_compositor_add_binding(ec, KEY_D, 0, 0, dModKey | MODIFIER_CTRL, Act_Client_TagSet, 1 << 2);
+	weston_compositor_add_binding(ec, KEY_F, 0, 0, dModKey | MODIFIER_CTRL, Act_Output_TagSet, 1 << 3);
+	weston_compositor_add_binding(ec, KEY_G, 0, 0, dModKey | MODIFIER_CTRL, Act_Output_TagSet, 1 << 4);
+	weston_compositor_add_binding(ec, KEY_H, 0, 0, dModKey | MODIFIER_CTRL, Act_Output_TagSet, 1 << 5);
+	weston_compositor_add_binding(ec, KEY_J, 0, 0, dModKey | MODIFIER_CTRL, Act_Output_TagSet, 1 << 6);
+	weston_compositor_add_binding(ec, KEY_K, 0, 0, dModKey | MODIFIER_CTRL, Act_Output_TagSet, 1 << 7);
 	
+	shell_restack();
 	
 	return 0;
 }
