@@ -198,6 +198,7 @@ static void
 x11_output_repaint(struct weston_output *output_base,
 		   pixman_region32_t *damage)
 {
+//	printf ("x11_output_repaint\n");
 	struct x11_output *output = (struct x11_output *)output_base;
 	struct x11_compositor *compositor =
 		(struct x11_compositor *)output->base.compositor;
@@ -211,7 +212,11 @@ x11_output_repaint(struct weston_output *output_base,
 
 	wl_list_for_each_reverse(surface, &compositor->base.surface_list, link)
 		weston_surface_draw(surface, &output->base, damage);
-
+	{
+		struct weston_input_device* wid;
+		wl_list_for_each_reverse(wid, &compositor->base.input_device_list, link)
+			weston_surface_draw(wid->sprite, &output->base, damage);
+	}
 	eglSwapBuffers(compositor->base.display, output->egl_surface);
 
 	wl_event_source_timer_update(output->finish_frame_timer, 10);

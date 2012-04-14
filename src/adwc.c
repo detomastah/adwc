@@ -649,7 +649,7 @@ weston_compositor_pick_surface(struct weston_compositor *compositor,
 			       int32_t x, int32_t y, int32_t *sx, int32_t *sy)
 {
 	struct weston_surface *surface;
-	//dTrace_E("");
+//	dTrace_E("");
 	
 	wl_list_for_each(surface, &compositor->surface_list, link) {
 	//	printf ("weston_compositor_pick_surface %d %d\n", surface->geometry.x, surface->geometry.y);
@@ -1630,7 +1630,8 @@ notify_motion(struct wl_input_device *device, uint32_t time, int x, int y)
 		weston_surface_set_position(wd->sprite,
 					    device->x - wd->hotspot_x,
 					    device->y - wd->hotspot_y);
-
+		
+		weston_surface_update_transform(wd->sprite);
 		weston_compositor_schedule_repaint(ec);
 	}
 }
@@ -2029,7 +2030,7 @@ input_device_attach(struct wl_client *client,
 				 device->input_device.x - device->hotspot_x,
 				 device->input_device.y - device->hotspot_y,
 				 buffer->width, buffer->height);
-
+	
 	surface_damage(NULL, &device->sprite->surface.resource,
 		       0, 0, buffer->width, buffer->height);
 }
