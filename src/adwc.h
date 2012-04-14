@@ -513,6 +513,11 @@ struct weston_move_grab {
 	int32_t dx, dy;
 };
 
+struct weston_swap_grab {
+	struct shell_grab base;
+	int32_t dx, dy;
+};
+
 struct rotate_grab {
 	struct shell_grab base;
 	struct weston_matrix rotation;

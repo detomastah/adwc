@@ -2784,60 +2784,6 @@ int main(int argc, char *argv[])
 
 struct wl_shell gShell;
 
-extern const struct wl_interface wl_output_interface;
-extern const struct wl_interface wl_shell_surface_interface;
-extern const struct wl_interface wl_output_interface;
-extern const struct wl_interface wl_shell_surface_interface;
-extern const struct wl_interface wl_shell_surface_interface;
-extern const struct wl_interface wl_shell_surface_interface;
-extern const struct wl_interface wl_shell_surface_interface;
-extern const struct wl_interface wl_output_interface;
-
-static const struct wl_interface *types[] = {
-	&wl_output_interface,
-	&wl_shell_surface_interface,
-	&wl_output_interface,
-	&wl_shell_surface_interface,
-	&wl_shell_surface_interface,
-	NULL,
-	&wl_shell_surface_interface,
-	NULL,
-	NULL,
-	&wl_shell_surface_interface,
-	&wl_output_interface,
-};
-
-static const struct wl_message desktop_shell_requests[] = {
-	{ "set_background", "oo", types + 0 },
-	{ "set_panel", "oo", types + 2 },
-	{ "set_lock_surface", "o", types + 4 },
-	{ "unlock", "", types + 0 },
-};
-
-static const struct wl_message desktop_shell_events[] = {
-	{ "configure", "uoii", types + 5 },
-	{ "prepare_lock_surface", "", types + 0 },
-};
-
-WL_EXPORT const struct wl_interface desktop_shell_interface = {
-	"desktop_shell", 1,
-	ARRAY_LENGTH(desktop_shell_requests), desktop_shell_requests,
-	ARRAY_LENGTH(desktop_shell_events), desktop_shell_events,
-};
-
-static const struct wl_message screensaver_requests[] = {
-	{ "set_surface", "oo", types + 9 },
-};
-
-WL_EXPORT const struct wl_interface screensaver_interface = {
-	"screensaver", 1,
-	ARRAY_LENGTH(screensaver_requests), screensaver_requests,
-	0, NULL,
-};
-
-
-
-
 static void
 destroy_shell_grab_shsurf(struct wl_listener *listener, void *data)
 {
@@ -3108,6 +3054,92 @@ shell_surface_resize(struct wl_client *client, struct wl_resource *resource,
 	if (weston_surface_resize(shsurf, wd, edges) < 0)
 		wl_resource_post_no_memory(resource);
 }
+
+
+
+
+static void
+swap_grab_motion(struct wl_pointer_grab *grab,
+		 uint32_t time, int32_t x, int32_t y)
+{
+	dTrace_E ("xy %d %d\n", x, y);
+	struct weston_swap_grab *move = (struct weston_swap_grab *) grab;
+	struct wl_input_device *device = grab->input_device;
+	struct shell_surface *shsurf = move->base.shsurf;
+	struct weston_surface *es;
+	
+	if (!shsurf)
+		return;
+	
+//	es = shsurf->surface;
+	int32_t sx = device->x, sy = device->y;
+	es = weston_compositor_pick_surface(gShell.compositor,
+						 device->x, device->y,
+						 &sx,
+						 &sy);/**/
+	if (!es)
+		return;
+	
+	if (es != shsurf->surface) {
+		printf ("YAAAAAAAAAAAAAAAAAAAAAAAAAAYYYYYY\n");
+	}else {
+		printf ("YAAAAAAAAAAAAAAAAAAAAAAAAAAYYYYYY NO\n");
+		
+	}
+//	weston_surface_configure(es,
+//				 device->x + move->dx,
+//				 device->y + move->dy,
+//				 es->geometry.width, es->geometry.height);
+}
+
+static void
+swap_grab_button(struct wl_pointer_grab *grab,
+		 uint32_t time, uint32_t button, int32_t state)
+{
+	struct shell_grab *shell_grab = container_of(grab, struct shell_grab,
+						    grab);
+	struct wl_input_device *device = grab->input_device;
+
+	if (device->button_count == 0 && state == 0) {
+		shell_grab_finish(shell_grab);
+		wl_input_device_end_pointer_grab(device);
+		free(grab);
+	}
+}
+
+static const struct wl_pointer_grab_interface swap_grab_interface = {
+	noop_grab_focus,
+	swap_grab_motion,
+	swap_grab_button,
+};
+
+static int
+weston_surface_swap(struct weston_surface *es,
+		    struct weston_input_device *wd)
+{
+	struct weston_swap_grab *move;
+	struct shell_surface *shsurf = get_shell_surface(es);
+	
+	if (!shsurf)
+		return -1;
+	
+	move = malloc(sizeof *move);
+	if (!move)
+		return -1;
+	
+	shell_grab_init(&move->base, &swap_grab_interface, shsurf);
+	
+	move->dx = es->geometry.x - wd->input_device.grab_x;
+	move->dy = es->geometry.y - wd->input_device.grab_y;
+	
+	wl_input_device_start_pointer_grab(&wd->input_device,
+					   &move->base.grab);
+	
+	wl_input_device_set_pointer_focus(&wd->input_device, NULL, 0, 0);
+	
+	return 0;
+}
+
 
 
 
@@ -3777,11 +3809,20 @@ desktop_shell_unlock(struct wl_client *client,
 		resume_desktop(shell);
 }
 
+static void
+desktop_shell_select_tag(struct wl_client *client,
+			   struct wl_resource *resource,
+			   uint32_t tag_no)
+{
+	printf("Tag No: %x\n", tag_no);
+}
+
 static const struct desktop_shell_interface desktop_shell_implementation = {
 	desktop_shell_set_background,
 	desktop_shell_set_panel,
 	desktop_shell_set_lock_surface,
-	desktop_shell_unlock
+	desktop_shell_unlock,
+	desktop_shell_select_tag
 };
 
 static enum shell_surface_type
@@ -3816,8 +3857,8 @@ move_binding(struct wl_input_device *device, uint32_t time,
 		default:
 			break;
 	}
-
-	weston_surface_move(surface, (struct weston_input_device *) device);
+	
+	weston_surface_swap(surface, (struct weston_input_device *) device);
 }
 
 static void
