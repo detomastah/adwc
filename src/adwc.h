@@ -759,6 +759,8 @@ shell_get_shell_surface(struct wl_client *client,
 			struct wl_resource *surface_resource);
 
 
+static struct weston_output*	CurrentOutput	();
+
 
 #endif
 

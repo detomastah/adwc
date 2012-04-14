@@ -3062,7 +3062,7 @@ static void
 swap_grab_motion(struct wl_pointer_grab *grab,
 		 uint32_t time, int32_t x, int32_t y)
 {
-	dTrace_E ("xy %d %d\n", x, y);
+//	dTrace_E ("xy %d %d\n", x, y);
 	struct weston_swap_grab *move = (struct weston_swap_grab *) grab;
 	struct wl_input_device *device = grab->input_device;
 	struct shell_surface *shsurf = move->base.shsurf;
@@ -3077,13 +3077,64 @@ swap_grab_motion(struct wl_pointer_grab *grab,
 						 device->x, device->y,
 						 &sx,
 						 &sy);/**/
-	if (!es)
-		return;
 	
+	if (!es) {
+		
+		return;
+	}
+	struct shell_surface *shsurf_to = get_shell_surface(es);
+	if (shsurf_to->type != SHELL_SURFACE_TOPLEVEL) {
+		struct weston_output* newout = CurrentOutput ();
+		printf ("MUHAHAHAHAH 10\n");
+		if (newout != shsurf->surface->output) {
+			printf ("MUHAHAHAHAH 11\n");
+			shsurf->Tags = newout->Tags;
+			shell_restack();
+		}
+		return;
+	}
 	if (es != shsurf->surface) {
-		printf ("YAAAAAAAAAAAAAAAAAAAAAAAAAAYYYYYY\n");
+		struct wl_list *s0 = &shsurf->L_link, *s1 = &shsurf_to->L_link;
+	//	printf ("YAAAAAAAAAAAAAAAAAAAAAAAAAAYYYYYY s0 %d %d		s1 %d %d\n", s0->surface->geometry.x, s0->surface->geometry.y, s1->surface->geometry.x, s1->surface->geometry.y);
+		if (s1->next == s0) {
+		//	printf ("MUHAHAHAHAH 0\n");
+			struct shell_surface *t = s0;
+			s0 = s1;
+			s1 = t;
+		}
+		if (s0->next == s1) {
+		//	printf ("MUHAHAHAHAH 1\n");
+			s0->next = s1->next;
+			s1->prev = s0->prev;
+			
+			s0->prev = s1;
+			s1->next = s0;
+			
+			s0->next->prev = s0;
+			s1->prev->next = s1;
+			
+			shell_restack ();
+		}else {
+		//	printf ("MUHAHAHAHAH 3\n");
+			struct wl_list *lp0 = s0->prev, *lp1 = s1->prev;
+		//	printf ("MUHAHAHAHAH %lx %lx\n", lp0, lp1);
+			wl_list_remove (s0);
+			wl_list_remove (s1);
+			
+			wl_list_insert (lp0, s1);
+			wl_list_insert (lp1, s0);/**/
+			
+			shell_restack ();
+		//	printf ("MUHAHAHAHAH 1\n");
+		}
+		
+	/*	if (shsurf->Tags != shsurf_to->Tags) {
+			tTags t = shsurf->Tags;
+			shsurf->Tags = shsurf_to->Tags;
+			shsurf_to->Tags = t;
+		}/**/
 	}else {
-		printf ("YAAAAAAAAAAAAAAAAAAAAAAAAAAYYYYYY NO\n");
+	//	printf ("YAAAAAAAAAAAAAAAAAAAAAAAAAAYYYYYY NO\n");
 		
 	}
 //	weston_surface_configure(es,
