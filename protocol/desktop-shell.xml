@@ -18,7 +18,10 @@
     <request name="unlock"/>
     
 	<request name="select_tag">
+		<arg name="panel_no" type="uint"></arg>
 		<arg name="tag_no" type="uint"></arg>
+		<arg name="button" type="uint"></arg>
+		<arg name="modifier" type="uint"></arg>
     </request>
 
     <!-- We'll fold most of wl_shell into this interface and then

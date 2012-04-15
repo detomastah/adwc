@@ -3871,9 +3871,9 @@ desktop_shell_unlock(struct wl_client *client,
 static void
 desktop_shell_select_tag(struct wl_client *client,
 			   struct wl_resource *resource,
-			   uint32_t tag_no)
+			   uint32_t panel_no, uint32_t tag_no, uint32_t button, uint32_t modifier)
 {
-	printf("Tag No: %x\n", tag_no);
+	printf("Tag No: %d %x %d\n", panel_no, tag_no, button);
 }
 
 static const struct desktop_shell_interface desktop_shell_implementation = {

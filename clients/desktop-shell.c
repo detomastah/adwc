@@ -62,6 +62,7 @@ struct panel {
 	struct wl_list launcher_list;
 	struct wl_list tag_list;
 	struct wl_list desktop_link;
+	int panel_no;
 };
 
 struct background {
@@ -92,7 +93,7 @@ struct panel_tag {
 	struct panel *panel;
 	cairo_surface_t *icon;
 	int focused, pressed;
-	int tag_no;
+	int tag_no, no;
 	struct wl_list link;
 	int font_size;
 	
@@ -222,6 +223,7 @@ panel_launcher_redraw_handler(struct widget *widget, void *data)
 static void
 panel_tag_redraw_handler(struct widget *widget, void *data)
 {
+	static char* tag_names[] = {"a", "s", "d", "f", "g", "h", "j", "k", "l", ";"};
 	struct panel_tag *tag = data;
 	cairo_text_extents_t extents;
 	cairo_surface_t *surface;
@@ -237,7 +239,7 @@ panel_tag_redraw_handler(struct widget *widget, void *data)
 			       CAIRO_FONT_SLANT_NORMAL,
 			       CAIRO_FONT_WEIGHT_BOLD);
 	cairo_set_font_size(cr, tag->font_size);
-	cairo_text_extents(cr, "1", &extents);
+	//cairo_text_extents(cr, "1", &extents);
 	int x = 0;
 	int y = 0;
 	cairo_move_to(cr, allocation.x, 26);
@@ -248,7 +250,7 @@ panel_tag_redraw_handler(struct widget *widget, void *data)
 	else
 		cairo_set_source_rgba(cr, 1, 0.5, 1, 1);
 	
-	cairo_show_text(cr, "1"); 
+	cairo_show_text(cr, tag_names[tag->no]); 
 	//cairo_set_source_surface(cr, launcher->icon, allocation.x, allocation.y);
 	//cairo_paint(cr);
 	
@@ -347,11 +349,10 @@ panel_tag_button_handler(struct widget *widget,
 			      int button, int state, void *data)
 {
 	struct panel_tag *tag = data;
-
+	int modifier = 0;
 	widget_schedule_redraw(widget);
 	if (state == 0)
-		desktop_shell_select_tag(tag->desktop->shell, tag->tag_no);
-
+		desktop_shell_select_tag(tag->desktop->shell, tag->panel->panel_no, tag->tag_no, button, modifier);
 }
 
 static void
@@ -451,8 +452,9 @@ panel_add_launcher(struct panel *panel, const char *icon, const char *path)
 }
 
 static void
-panel_add_tag(struct panel *panel, struct desktop *desktop, int tag_no)
+panel_add_tag(struct panel *panel, struct desktop *desktop, int panel_no, int no)
 {
+
 	struct panel_tag *tag;
 
 	tag = malloc(sizeof *tag);
@@ -461,9 +463,11 @@ panel_add_tag(struct panel *panel, struct desktop *desktop, int tag_no)
 	wl_list_insert(panel->tag_list.prev, &tag->link);
 
 	tag->widget = widget_add_widget(panel->widget, tag);
-	tag->tag_no = tag_no;
+	tag->tag_no = (1 << no);
+	tag->no = no;
 	tag->font_size = 24;
 	tag->panel = panel;
+	tag->panel->panel_no = panel_no;
 	tag->desktop = desktop;
 	
 	widget_set_enter_handler(tag->widget,
@@ -856,11 +860,12 @@ static void
 add_default_tags(struct desktop *desktop)
 {
 	struct output *output;
-	int i;
+	int no, panel_no = 1;
 	wl_list_for_each(output, &desktop->outputs, link)
 	{
-		for (i=0; i < 10; i++)
-			panel_add_tag(output->panel, desktop, 1 << i);
+		for (no=0; no < 10; no++)
+			panel_add_tag(output->panel, desktop, panel_no, no);
+		panel_no++;
 		
     }
 }

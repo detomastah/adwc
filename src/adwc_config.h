@@ -1,6 +1,6 @@
 
 
-#define dModKey MODIFIER_ALT
+#define dModKey MODIFIER_SUPER
 /*
 #define TAGKEYS(KEY,TAG) \
 	((tADWC_Binding){ .Key = dModKey,				KEY,	view,		{.ui = 1 << (TAG)} }), \
