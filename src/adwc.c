@@ -660,6 +660,9 @@ weston_compositor_pick_surface(struct weston_compositor *compositor,
 	return NULL;
 }
 
+static struct shell_surface *
+get_shell_surface(struct weston_surface *surface);
+static void		activate		(struct wl_shell *shell, struct weston_surface *es, struct weston_input_device *device);
 static void
 weston_device_repick(struct wl_input_device *device)
 {
@@ -682,9 +685,13 @@ weston_device_repick(struct wl_input_device *device)
 	focus = (struct weston_surface *) device->pointer_grab->focus;
 	
 	if (focus) {
-		weston_surface_activate(focus, device);
-		weston_surface_from_global(focus, device->x, device->y,
-					   &device->pointer_grab->x, &device->pointer_grab->y);
+            struct shell_surface* shsurf = get_shell_surface(focus);
+            if(shsurf)
+		activate(shsurf->shell, focus, device);
+            else
+                weston_surface_activate(focus, device);
+            weston_surface_from_global(focus, device->x, device->y,
+                                       &device->pointer_grab->x, &device->pointer_grab->y);
 	}
 }
 
@@ -4262,6 +4269,12 @@ static void		activate		(struct wl_shell *shell, struct weston_surface *es, struc
 
 		weston_surface_restack(es,
 				       &shell->toplevel_layer.surface_list);
+                struct shell_surface* shsurf = get_shell_surface(es);
+                if(shsurf->L == L_eFloat) {
+                  wl_list_remove(&shsurf->L_link);
+                  wl_list_insert(gShell.L[L_eFloat].prev, &shsurf->L_link);
+                  shell_restack();
+                }
 		break;
 	}
 }

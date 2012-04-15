@@ -244,11 +244,11 @@ panel_tag_redraw_handler(struct widget *widget, void *data)
 	int y = 0;
 	cairo_move_to(cr, allocation.x, 26);
 	if (tag->focused)
-		cairo_set_source_rgba(cr, 0.5, 1, 1, 1);
+		cairo_set_source_rgba(cr, 0.8, 1, 1, 1);
 	else if (tag->pressed)
 		cairo_set_source_rgba(cr, 1, 0, 0, 1);
 	else
-		cairo_set_source_rgba(cr, 1, 0.5, 1, 1);
+		cairo_set_source_rgba(cr, 0, 0.7, 1, 1);
 	
 	cairo_show_text(cr, tag_names[tag->no]); 
 	//cairo_set_source_surface(cr, launcher->icon, allocation.x, allocation.y);
