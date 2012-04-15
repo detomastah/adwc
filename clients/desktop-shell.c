@@ -726,7 +726,6 @@ desktop_shell_receive_tag(void *data,
 	struct panel *panel;
 	wl_list_for_each(panel, &desktop->panels, desktop_link)
 	{
-		puts("Z1111");
 		struct panel_tag *tag;
 		wl_list_for_each(tag, &panel->tag_list, link)
 		{
@@ -734,8 +733,6 @@ desktop_shell_receive_tag(void *data,
 				tag->pressed = 1;
 			else
 				tag->pressed = 0;
-			puts("y1111");
-			
 		}
 		widget_schedule_redraw(panel->widget);
 	}
