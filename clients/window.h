@@ -200,6 +200,8 @@ window_create_transient(struct display *display, struct window *parent,
 
 typedef void (*menu_func_t)(struct window *window, int index, void *data);
 
+void window_get_position(struct window *window, int *x, int *y);
+
 void
 window_show_menu(struct display *display,
 		 struct input *input, uint32_t time, struct window *parent,

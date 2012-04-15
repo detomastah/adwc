@@ -715,26 +715,33 @@ desktop_shell_configure(void *data,
 	s->configure(data, desktop_shell, edges, window, width, height);
 }
 
+
 static void
 desktop_shell_receive_tag(void *data,
 			struct desktop_shell *desktop_shell,
 			uint32_t x,
 		    uint32_t tag_no)
 {
+	int panel_no = 1;
 	printf("Desktop shell tag received %d %d\n", x, tag_no);
 	struct desktop *desktop = data;
 	struct panel *panel;
+	
 	wl_list_for_each(panel, &desktop->panels, desktop_link)
 	{
-		struct panel_tag *tag;
-		wl_list_for_each(tag, &panel->tag_list, link)
+		if ((panel_no == 1 && x == 0) || (panel_no == 2 && x == 640))
 		{
-			if (tag->tag_no & tag_no)
-				tag->pressed = 1;
-			else
-				tag->pressed = 0;
+			struct panel_tag *tag;
+			wl_list_for_each(tag, &panel->tag_list, link)
+			{
+				if (tag->tag_no & tag_no)
+					tag->pressed = 1;
+				else
+					tag->pressed = 0;
+			}
 		}
 		widget_schedule_redraw(panel->widget);
+		panel_no++;
 	}
 	
 }
