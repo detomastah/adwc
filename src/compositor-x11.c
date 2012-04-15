@@ -367,8 +367,8 @@ static int
 x11_compositor_create_output(struct x11_compositor *c, int x, int y,
 			     int width, int height, int fullscreen)
 {
-	static const char name[] = "Weston Compositor";
-	static const char class[] = "weston-1\0Weston Compositor";
+	static const char name[] = "A.D.W.C.";
+	static const char class[] = "A.D.W.C. 1\0A.D.W.C.";
 	struct x11_output *output;
 	xcb_screen_iterator_t iter;
 	struct wm_normal_hints normal_hints;

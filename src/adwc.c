@@ -3936,7 +3936,7 @@ resize_binding(struct wl_input_device *device, uint32_t time,
 	shsurf = get_shell_surface(surface);
 	if (!shsurf)
 		return;
-
+	
 	switch (shsurf->type) {
 		case SHELL_SURFACE_PANEL:
 		case SHELL_SURFACE_BACKGROUND:
@@ -3946,7 +3946,10 @@ resize_binding(struct wl_input_device *device, uint32_t time,
 		default:
 			break;
 	}
-
+	
+	ShSurf_LSet (shsurf, L_eFloat);
+	shell_restack ();
+	
 	weston_surface_from_global(surface,
 				   device->grab_x, device->grab_y, &x, &y);
 
@@ -4522,7 +4525,8 @@ shell_get_shell_surface(struct wl_client *client,
 
 	shsurf->type = SHELL_SURFACE_NONE;
 	
-	wl_list_insert(&gShell.L[L_eNorm], &shsurf->L_link);
+	shsurf->L = L_eNorm;
+	wl_list_insert(&gShell.L[shsurf->L], &shsurf->L_link);
 	
 	
 	
@@ -5055,6 +5059,16 @@ Output_PanelGet		(struct weston_output *output)
 
 
 
+/** *********************************** Shell_Surf ************************************ **/
+
+void	ShSurf_LSet		(struct shell_surface* shsurf, uint8_t l)
+{
+	if (l == shsurf->L)
+		return;
+	wl_list_remove (&shsurf->L_link);
+	shsurf->L = l;
+	wl_list_insert(&gShell.L[shsurf->L], &shsurf->L_link);
+}
 
 
 
@@ -5171,10 +5185,9 @@ void shell_restack()
 	shell_L_print (&gShell);
 	
 	wl_list_for_each(output, &gShell.compositor->output_list, link) {
-		printf("output TAG: %lx\n", output->Tags);
-                wl_list_init(&output->surfaces);
+//		printf("output TAG: %lx\n", output->Tags);
+		wl_list_init(&output->surfaces);
 	}
-	
 	
 	wl_list_init(&gShell.compositor->surface_list);
 	
@@ -5182,27 +5195,26 @@ void shell_restack()
 		if (shsurf->type == SHELL_SURFACE_BACKGROUND
 			|| shsurf->type == SHELL_SURFACE_PANEL
 		) {
-			printf("surf TAG: %x\n", shsurf->Tags);
+		//	printf("surf TAG: %x\n", shsurf->Tags);
 			wl_list_insert(&gShell.compositor->surface_list, &shsurf->surface->link);
 		}
 	}
-	
-	wl_list_for_each(shsurf, &gShell.L[L_eNorm], L_link) {
-		wl_list_for_each(output, &gShell.compositor->output_list, link) {
-			if (shsurf->type == SHELL_SURFACE_BACKGROUND
-				|| shsurf->type == SHELL_SURFACE_PANEL
-			)
-				continue;
-			if (shsurf->Tags & output->Tags) {
-				printf("surf TAG: %x\n", shsurf->Tags);
-				shsurf->output = output;
-				wl_list_insert(&gShell.compositor->surface_list, &shsurf->surface->link);
-                                wl_list_insert(&output->surfaces, &shsurf->O_link);
-				break;
-			}else {
-				//if (weston_surface_is_mapped(surface->surface)) {
-				//	weston_surface_unmap(surface->surface);
-				//}
+	int i;
+	for (i = 0; i < L_NUM; ++i) {
+		wl_list_for_each(shsurf, &gShell.L[i], L_link) {
+			wl_list_for_each(output, &gShell.compositor->output_list, link) {
+				if (shsurf->type == SHELL_SURFACE_BACKGROUND
+					|| shsurf->type == SHELL_SURFACE_PANEL
+				)
+					continue;
+				if (shsurf->Tags & output->Tags) {
+				//	printf("surf TAG: %x\n", shsurf->Tags);
+					shsurf->output = output;
+					wl_list_insert(&gShell.compositor->surface_list, &shsurf->surface->link);
+					if (i == L_eNorm)
+						wl_list_insert(&output->surfaces, &shsurf->O_link);
+					break;
+				}
 			}
 		}
 	}
@@ -5213,9 +5225,9 @@ void shell_restack()
 		wl_list_insert(&gShell.compositor->surface_list, &wid->sprite->link);
 	//	weston_surface_assign_output(wid->sprite);
 	}*/
-        wl_list_for_each(output, &gShell.compositor->output_list, link) {
-          layout(output);
-        }
+	wl_list_for_each(output, &gShell.compositor->output_list, link) {
+		layout(output);
+	}
 	
 	weston_compositor_damage_all(gShell.compositor);
 	dTrace_L("");

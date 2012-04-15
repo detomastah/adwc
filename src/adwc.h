@@ -498,8 +498,9 @@ struct shell_surface {
 	
 	
 	tTags Tags;
+	uint8_t L;
 	struct wl_list L_link;
-        struct wl_list O_link;
+	struct wl_list O_link;
 };
 
 struct shell_grab {
@@ -761,6 +762,7 @@ shell_get_shell_surface(struct wl_client *client,
 
 static struct weston_output*	CurrentOutput	();
 
+void	ShSurf_LSet		(struct shell_surface* shsurf, uint8_t l);
 
 #endif
 
