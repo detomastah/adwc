@@ -4279,10 +4279,6 @@ static void		map			(struct wl_shell *shell, struct weston_surface *surface, int3
 	shsurf = get_shell_surface(surface);
 	if (shsurf) {
 		surface_type = shsurf->type;
-		static int Linc = 1;
-		//shsurf->Tags = Linc;
-                shsurf->Tags = 1;
-		Linc <<= 1;
 	}
 	surface->geometry.width = width;
 	surface->geometry.height = height;
@@ -4291,8 +4287,9 @@ static void		map			(struct wl_shell *shell, struct weston_surface *surface, int3
 	/* initial positioning, see also configure() */
 	switch (surface_type) {
 	case SHELL_SURFACE_TOPLEVEL:
-		weston_surface_set_position(surface, 10 + random() % 400,
-					    10 + random() % 400);
+		shsurf->Tags = CurrentOutput()->Tags;
+	//	weston_surface_set_position(surface, 10 + random() % 400,
+	//				    10 + random() % 400);
 		break;
 	case SHELL_SURFACE_SCREENSAVER:
 		center_on_output(surface, shsurf->fullscreen_output);
