@@ -3090,15 +3090,15 @@ swap_grab_motion(struct wl_pointer_grab *grab,
 		
 		return;
 	}
+	
+	struct weston_output* newout = CurrentOutput ();
+	if (newout != shsurf->surface->output) {
+		shsurf->Tags = newout->Tags;
+		shell_restack();
+	}
+	
 	struct shell_surface *shsurf_to = get_shell_surface(es);
 	if (shsurf_to->type != SHELL_SURFACE_TOPLEVEL) {
-		struct weston_output* newout = CurrentOutput ();
-		printf ("MUHAHAHAHAH 10\n");
-		if (newout != shsurf->surface->output) {
-			printf ("MUHAHAHAHAH 11\n");
-			shsurf->Tags = newout->Tags;
-			shell_restack();
-		}
 		return;
 	}
 	if (es != shsurf->surface) {
@@ -5148,8 +5148,8 @@ void layout(struct weston_output* output) {
 		//resize(c, cx, cy, cw, ch, False);
 	//	printf("x:%d y:%d w:%d h:%d", cx, cy, cw, ch);
 		struct weston_surface* es = c->surface;
-		weston_surface_configure(es, cx - 32, cy - 32, cw + 64, ch + 64);
-		wl_shell_surface_send_configure(&c->resource, 0, cw + 64, ch + 64);
+		weston_surface_configure(es, cx - 31, cy - 31, cw + 62, ch + 62);
+		wl_shell_surface_send_configure(&c->resource, 0, cw + 62, ch + 62);
 		rn++;
 		if(rn >= rows) {
 			rn = 0;
