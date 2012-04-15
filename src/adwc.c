@@ -680,6 +680,7 @@ weston_device_repick(struct wl_input_device *device)
 	}
 
 	focus = (struct weston_surface *) device->pointer_grab->focus;
+        weston_surface_activate(focus, device);
 	if (focus)
 		weston_surface_from_global(focus, device->x, device->y,
 					   &device->pointer_grab->x, &device->pointer_grab->y);
