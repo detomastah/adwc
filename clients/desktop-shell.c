@@ -45,6 +45,7 @@ struct desktop {
 	struct unlock_dialog *unlock_dialog;
 	struct task unlock_task;
 	struct wl_list outputs;
+	struct wl_list panels;
 };
 
 struct surface {
@@ -60,6 +61,7 @@ struct panel {
 	struct widget *widget;
 	struct wl_list launcher_list;
 	struct wl_list tag_list;
+	struct wl_list desktop_link;
 };
 
 struct background {
@@ -241,6 +243,8 @@ panel_tag_redraw_handler(struct widget *widget, void *data)
 	cairo_move_to(cr, allocation.x, 26);
 	if (tag->focused)
 		cairo_set_source_rgba(cr, 0.5, 1, 1, 1);
+	else if (tag->pressed)
+		cairo_set_source_rgba(cr, 1, 0, 0, 1);
 	else
 		cairo_set_source_rgba(cr, 1, 0.5, 1, 1);
 	
@@ -718,6 +722,24 @@ desktop_shell_receive_tag(void *data,
 		    uint32_t tag_no)
 {
 	printf("Desktop shell tag received %d %d\n", x, tag_no);
+	struct desktop *desktop = data;
+	struct panel *panel;
+	wl_list_for_each(panel, &desktop->panels, desktop_link)
+	{
+		puts("Z1111");
+		struct panel_tag *tag;
+		wl_list_for_each(tag, &panel->tag_list, link)
+		{
+			if (tag->tag_no & tag_no)
+				tag->pressed = 1;
+			else
+				tag->pressed = 0;
+			puts("y1111");
+			
+		}
+		widget_schedule_redraw(panel->widget);
+	}
+	
 }
 
 static void
@@ -830,13 +852,12 @@ static void
 add_default_tags(struct desktop *desktop)
 {
 	struct output *output;
-
+	int i;
 	wl_list_for_each(output, &desktop->outputs, link)
 	{
-		panel_add_tag(output->panel, desktop, 1);
-		panel_add_tag(output->panel, desktop, 2);
-		panel_add_tag(output->panel, desktop, 4);
-		panel_add_tag(output->panel, desktop, 8);
+		for (i=0; i < 10; i++)
+			panel_add_tag(output->panel, desktop, 1 << i);
+		
     }
 }
 
@@ -849,6 +870,7 @@ int main(int argc, char *argv[])
 
 	desktop.unlock_task.run = unlock_dialog_finish;
 	wl_list_init(&desktop.outputs);
+	wl_list_init(&desktop.panels);
 
 	desktop.display = display_create(argc, argv);
 	if (desktop.display == NULL) {
@@ -869,6 +891,7 @@ int main(int argc, char *argv[])
 		output->background = background_create(&desktop);
 		s = window_get_wl_shell_surface(output->background->window);
 		desktop_shell_set_background(desktop.shell, output->output, s);
+		wl_list_insert(&desktop.panels, &output->panel->desktop_link);
 	}
 
 	config_file = config_file_path("weston.ini");
