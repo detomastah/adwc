@@ -235,7 +235,7 @@ panel_tag_redraw_handler(struct widget *widget, void *data)
 	widget_get_allocation(widget, &allocation);
 
 	cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
-	cairo_select_font_face(cr, "sans",
+	cairo_select_font_face(cr, "monospace",
 			       CAIRO_FONT_SLANT_NORMAL,
 			       CAIRO_FONT_WEIGHT_BOLD);
 	cairo_set_font_size(cr, tag->font_size);
@@ -452,7 +452,7 @@ panel_add_launcher(struct panel *panel, const char *icon, const char *path)
 }
 
 static void
-panel_add_tag(struct panel *panel, struct desktop *desktop, int panel_no, int no)
+panel_add_tag(struct panel *panel, struct desktop *desktop, int panel_no, int no, int pressed)
 {
 
 	struct panel_tag *tag;
@@ -465,6 +465,7 @@ panel_add_tag(struct panel *panel, struct desktop *desktop, int panel_no, int no
 	tag->widget = widget_add_widget(panel->widget, tag);
 	tag->tag_no = (1 << no);
 	tag->no = no;
+	tag->pressed = pressed;
 	tag->font_size = 24;
 	tag->panel = panel;
 	tag->panel->panel_no = panel_no;
@@ -481,6 +482,7 @@ panel_add_tag(struct panel *panel, struct desktop *desktop, int panel_no, int no
 				  panel_tag_redraw_handler);
 				  
     puts("ADDED");
+    return tag;
 }
 
 enum {
@@ -863,8 +865,15 @@ add_default_tags(struct desktop *desktop)
 	int no, panel_no = 1;
 	wl_list_for_each(output, &desktop->outputs, link)
 	{
+		int pressed;
 		for (no=0; no < 10; no++)
-			panel_add_tag(output->panel, desktop, panel_no, no);
+		{
+			if ((panel_no == 1 && no == 0) || (panel_no == 2 && no == 1))
+				pressed = 1;
+			else
+				pressed = 0;
+			panel_add_tag(output->panel, desktop, panel_no, no, pressed);
+		}
 		panel_no++;
 		
     }
