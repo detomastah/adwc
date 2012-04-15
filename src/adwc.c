@@ -4992,14 +4992,27 @@ static void		Act_Output_TagSet		(struct wl_input_device *device, uint32_t time, 
 	
 }
 
-static void		Act_Surf_Teleport               (struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data) {
+static void		Act_Surf_Teleport		(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
+{
 	struct weston_surface* surf = gShell.compositor->input_device->current;
 	if (!surf)
 		return;
 	struct shell_surface* shsurf = get_shell_surface(surf);
-        struct weston_output* tgt = surf->output->link.next;
-	shsurf->Tags = data;
-        shsurf->output = tgt;
+	struct wl_list* list;
+	if ((int)data > 0) {
+		list = surf->output->link.next;
+		if (list == &gShell.compositor->output_list) {
+			list = gShell.compositor->output_list.next;
+		}
+	}else {
+		list = surf->output->link.prev;
+		if (list == &gShell.compositor->output_list) {
+			list = gShell.compositor->output_list.prev;
+		}
+	}
+	struct weston_output* tgt = container_of(list, struct weston_output, link);
+	shsurf->Tags = tgt->Tags;
+	shsurf->output = tgt;
 	shell_restack();
 }
 
@@ -5089,9 +5102,9 @@ void shell_restack()
 				|| shsurf->type == SHELL_SURFACE_PANEL
 			)
 				continue;
-			
 			if (shsurf->Tags & output->Tags) {
 				printf("surf TAG: %x\n", shsurf->Tags);
+				shsurf->output = output;
 				wl_list_insert(&gShell.compositor->surface_list, &shsurf->surface->link);
                                 wl_list_insert(&output->surfaces, &shsurf->O_link);
 				break;
@@ -5300,11 +5313,14 @@ shell_init(struct weston_compositor *ec)
 	weston_compositor_add_binding(ec, KEY_A, 0, 0, dModKey | MODIFIER_CTRL, Act_Client_TagSet, 1 << 0);
 	weston_compositor_add_binding(ec, KEY_S, 0, 0, dModKey | MODIFIER_CTRL, Act_Client_TagSet, 1 << 1);
 	weston_compositor_add_binding(ec, KEY_D, 0, 0, dModKey | MODIFIER_CTRL, Act_Client_TagSet, 1 << 2);
-	weston_compositor_add_binding(ec, KEY_F, 0, 0, dModKey | MODIFIER_CTRL, Act_Output_TagSet, 1 << 3);
-	weston_compositor_add_binding(ec, KEY_G, 0, 0, dModKey | MODIFIER_CTRL, Act_Output_TagSet, 1 << 4);
-	weston_compositor_add_binding(ec, KEY_H, 0, 0, dModKey | MODIFIER_CTRL, Act_Output_TagSet, 1 << 5);
-	weston_compositor_add_binding(ec, KEY_J, 0, 0, dModKey | MODIFIER_CTRL, Act_Output_TagSet, 1 << 6);
-	weston_compositor_add_binding(ec, KEY_K, 0, 0, dModKey | MODIFIER_CTRL, Act_Output_TagSet, 1 << 7);
+	weston_compositor_add_binding(ec, KEY_F, 0, 0, dModKey | MODIFIER_CTRL, Act_Client_TagSet, 1 << 3);
+	weston_compositor_add_binding(ec, KEY_G, 0, 0, dModKey | MODIFIER_CTRL, Act_Client_TagSet, 1 << 4);
+	weston_compositor_add_binding(ec, KEY_H, 0, 0, dModKey | MODIFIER_CTRL, Act_Client_TagSet, 1 << 5);
+	weston_compositor_add_binding(ec, KEY_J, 0, 0, dModKey | MODIFIER_CTRL, Act_Client_TagSet, 1 << 6);
+	weston_compositor_add_binding(ec, KEY_K, 0, 0, dModKey | MODIFIER_CTRL, Act_Client_TagSet, 1 << 7);
+	
+	weston_compositor_add_binding(ec, KEY_Q, 0, 0, dModKey | MODIFIER_CTRL, Act_Surf_Teleport, 1);
+	weston_compositor_add_binding(ec, KEY_W, 0, 0, dModKey | MODIFIER_CTRL, Act_Surf_Teleport, -1);
 	
 	shell_restack();
 	
