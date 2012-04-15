@@ -2873,13 +2873,16 @@ move_grab_motion(struct wl_pointer_grab *grab,
 
 	if (!shsurf)
 		return;
-
+	
+	ShSurf_LSet (shsurf, L_eFloat);
+	
 	es = shsurf->surface;
-
+	
 	weston_surface_configure(es,
 				 device->x + move->dx,
 				 device->y + move->dy,
 				 es->geometry.width, es->geometry.height);
+	
 }
 
 static void
