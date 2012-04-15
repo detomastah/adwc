@@ -754,7 +754,6 @@ weston_surface_destroy(struct weston_surface *surface)
 {
 	/* Not a valid way to destroy a client surface */
 	assert(surface->surface.resource.client == NULL);
-
 	destroy_surface(&surface->surface.resource);
 }
 
@@ -3631,6 +3630,8 @@ destroy_shell_surface(struct wl_resource *resource)
 		weston_surface_destroy(shsurf->fullscreen.black_surface);
 
 	wl_list_remove(&shsurf->link);
+        wl_list_remove(&shsurf->L_link);
+        shell_restack();
 	free(shsurf);
 }
 
@@ -3948,7 +3949,6 @@ resize_binding(struct wl_input_device *device, uint32_t time,
 	}
 	
 	ShSurf_LSet (shsurf, L_eFloat);
-	shell_restack ();
 	
 	weston_surface_from_global(surface,
 				   device->grab_x, device->grab_y, &x, &y);
@@ -5068,6 +5068,7 @@ void	ShSurf_LSet		(struct shell_surface* shsurf, uint8_t l)
 	wl_list_remove (&shsurf->L_link);
 	shsurf->L = l;
 	wl_list_insert(&gShell.L[shsurf->L], &shsurf->L_link);
+        shell_restack();
 }
 
 
@@ -5085,6 +5086,16 @@ static void		Act_Client_TagSet		(struct wl_input_device *device, uint32_t time, 
 	shsurf->Tags = data;
 	shell_restack();
 	
+}
+
+static void		Act_Client_Unfloat		(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
+{
+	struct weston_surface* surf = gShell.compositor->input_device->current;
+	if (!surf)
+		return;
+	struct shell_surface* shsurf = get_shell_surface(surf);
+        if(surf)
+          ShSurf_LSet(shsurf, L_eNorm);
 }
 
 static void		Act_Output_TagSet		(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
@@ -5372,6 +5383,8 @@ shell_init(struct weston_compositor *ec)
 					move_binding, shell);
 	weston_compositor_add_binding(ec, 0, BTN_MIDDLE, 0, dModKey,
 					resize_binding, shell);
+	weston_compositor_add_binding(ec, 0, BTN_RIGHT, 0, dModKey,
+					resize_binding, shell);
 	weston_compositor_add_binding(ec, KEY_BACKSPACE, 0, 0,
 					MODIFIER_CTRL | MODIFIER_ALT,
 					terminate_binding, ec);
@@ -5424,6 +5437,8 @@ shell_init(struct weston_compositor *ec)
 	
 	weston_compositor_add_binding(ec, KEY_Q, 0, 0, dModKey | MODIFIER_CTRL, Act_Surf_Teleport, 1);
 	weston_compositor_add_binding(ec, KEY_W, 0, 0, dModKey | MODIFIER_CTRL, Act_Surf_Teleport, -1);
+
+	weston_compositor_add_binding(ec, KEY_Z, 0, 0, dModKey | MODIFIER_CTRL, Act_Client_Unfloat, 0);
 	
 	shell_restack();
 	
