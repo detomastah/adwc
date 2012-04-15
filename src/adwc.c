@@ -5078,7 +5078,6 @@ static void		Act_Output_TagSet		(struct wl_input_device *device, uint32_t time, 
 	struct weston_surface* surf = gShell.compositor->input_device->current;
 	struct weston_output* out = CurrentOutput();
 	
-	
 	Output_TagView (out, data);
 	
 	printf ("Output_TagSet %lx\n", out->Tags);
@@ -5114,13 +5113,13 @@ static void		Act_Surf_Teleport		(struct wl_input_device *device, uint32_t time, 
 /** *********************************** shell main ************************************ **/
 
 void layout(struct weston_output* output) {
-	unsigned int n, cols, rows, cn, rn, i, cx, cy, cw, ch, mw, mh, mx, my;
+	int n, cols, rows, cn, rn, i, cx, cy, cw, ch, mw, mh, mx, my;
 	struct shell_surface* c;
 	
 	mw = output->mm_width;
-	mh = output->mm_height;
+	mh = output->mm_height - 32;
 	mx = output->x;
-	my = output->y;
+	my = output->y + 32;
 	printf("mw:%d mh:%d mx:%d my:%d\n", mw, mh, mx, my);
 	
 	n = wl_list_length(&output->surfaces);
@@ -5149,8 +5148,8 @@ void layout(struct weston_output* output) {
 		//resize(c, cx, cy, cw, ch, False);
 	//	printf("x:%d y:%d w:%d h:%d", cx, cy, cw, ch);
 		struct weston_surface* es = c->surface;
-		weston_surface_configure(es, cx, cy, cw, ch);
-		wl_shell_surface_send_configure(&c->resource, 0, cw, ch);
+		weston_surface_configure(es, cx - 32, cy - 32, cw + 64, ch + 64);
+		wl_shell_surface_send_configure(&c->resource, 0, cw + 64, ch + 64);
 		rn++;
 		if(rn >= rows) {
 			rn = 0;
