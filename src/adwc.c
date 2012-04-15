@@ -4271,7 +4271,9 @@ static void		activate		(struct wl_shell *shell, struct weston_surface *es, struc
                 if(shsurf->L == L_eFloat) {
                   wl_list_remove(&shsurf->L_link);
                   wl_list_insert(gShell.L[L_eFloat].prev, &shsurf->L_link);
-                  shell_restack();
+                  wl_list_remove(&es->link);
+                  wl_list_insert(&gShell.compositor->surface_list, &es->link);
+                  weston_compositor_damage_all(gShell.compositor);
                 }
 		break;
 	}
@@ -4306,8 +4308,6 @@ static void		map			(struct wl_shell *shell, struct weston_surface *surface, int3
 	struct weston_surface *parent;
 	int panel_height = 0;
 	
-	shell_L_print(shell);
-
 	shsurf = get_shell_surface(surface);
 	if (shsurf) {
 		surface_type = shsurf->type;
@@ -5096,7 +5096,7 @@ void	ShSurf_LSet		(struct shell_surface* shsurf, uint8_t l)
 		return;
 	wl_list_remove (&shsurf->L_link);
 	shsurf->L = l;
-	wl_list_insert(&gShell.L[shsurf->L], &shsurf->L_link);
+	wl_list_insert(gShell.L[shsurf->L].prev, &shsurf->L_link);
         shell_restack();
 }
 
