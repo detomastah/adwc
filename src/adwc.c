@@ -2968,6 +2968,8 @@ resize_grab_motion(struct wl_pointer_grab *grab,
 	if (!resize->base.shsurf)
 		return;
 
+	ShSurf_LSet (resize->base.shsurf, L_eFloat);
+	
 	weston_surface_from_global(resize->base.shsurf->surface,
 				   device->grab_x, device->grab_y,
 				   &from_x, &from_y);
@@ -3964,7 +3966,7 @@ resize_binding(struct wl_input_device *device, uint32_t time,
 			break;
 	}
 	
-	ShSurf_LSet (shsurf, L_eFloat);
+//	ShSurf_LSet (shsurf, L_eFloat);
 	
 	weston_surface_from_global(surface,
 				   device->grab_x, device->grab_y, &x, &y);
