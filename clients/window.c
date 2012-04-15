@@ -317,6 +317,14 @@ display_create_egl_window_surface(struct display *display,
 
 #endif
 
+void window_get_position(struct window *window, int *x, int *y)
+{
+	if (x)
+		*x = window->x;
+	if (y)
+		*y = window->y;
+}
+
 struct wl_buffer *
 display_get_buffer_for_surface(struct display *display,
 			       cairo_surface_t *surface)
