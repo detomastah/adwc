@@ -3917,8 +3917,10 @@ move_binding(struct wl_input_device *device, uint32_t time,
 		default:
 			break;
 	}
-	
-	weston_surface_swap(surface, (struct weston_input_device *) device);
+	if (get_shell_surface(surface)->L == L_eFloat)
+		weston_surface_move(surface, (struct weston_input_device *) device);
+	else
+		weston_surface_swap(surface, (struct weston_input_device *) device);
 }
 
 static void
