@@ -680,10 +680,12 @@ weston_device_repick(struct wl_input_device *device)
 	}
 
 	focus = (struct weston_surface *) device->pointer_grab->focus;
-        weston_surface_activate(focus, device);
-	if (focus)
+	
+	if (focus) {
+		weston_surface_activate(focus, device);
 		weston_surface_from_global(focus, device->x, device->y,
 					   &device->pointer_grab->x, &device->pointer_grab->y);
+	}
 }
 
 WL_EXPORT void
@@ -2448,8 +2450,13 @@ weston_output_init(struct weston_output *output, struct weston_compositor *c,
 		wl_display_add_global(c->wl_display, &wl_output_interface,
 				      output, bind_output);
 	
-	output->Tags = 1;
-        wl_list_init(&output->surfaces);
+	{
+		static tTags s_tags = 1;
+		output->Tags = s_tags;
+		s_tags <<= 1;
+	}
+	
+	wl_list_init(&output->surfaces);
 }
 
 static void
@@ -4939,6 +4946,7 @@ switcher_binding(struct wl_input_device *device, uint32_t time,
 
 /** *********************************** NEW ************************************ **/
 
+/** *********************************** GLOBAL ************************************ **/
 
 static struct weston_output*	CurrentOutput	()
 {
@@ -4959,6 +4967,78 @@ static struct weston_output*	CurrentOutput	()
 		return es->output;
 		break;
 	}*/
+}
+
+
+bool	Tag_isVisible	(tTags tags)
+{
+	struct weston_output *iout;
+	wl_list_for_each(iout, &gShell.compositor->output_list, link) {
+		if (iout->Tags & tags) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+Bool	Tag_isVisibleOnOther	(tTags tags, struct weston_output *output)
+{
+	struct weston_output *iout;
+	wl_list_for_each(iout, &gShell.compositor->output_list, link) {
+		if (iout == output)
+			continue;
+		if (iout->Tags & tags) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+
+
+/** *********************************** Output ************************************ **/
+
+
+bool	Output_TagisVisible		(struct weston_output *out, tTags tags)
+{
+	if (out->Tags & tags)
+		return 1;
+	return 0;
+}
+
+void	Output_TagSet		(struct weston_output *out, tTags tags)
+{
+	out->Tags = tags;
+	
+	desktop_shell_send_select_tag(gShell.child.desktop_shell, out->x, out->Tags);
+	gShell.prepare_event_sent = true;
+}
+
+void	Output_TagView			(struct weston_output *out, tTags newtag)
+{
+	struct weston_output *iout;
+	wl_list_for_each(iout, &gShell.compositor->output_list, link) {
+		
+		if (iout != out && Output_TagisVisible (iout, newtag)) {
+			Output_TagSet (iout, out->Tags);
+			Output_TagSet (out, newtag);
+			
+			shell_restack();
+		//	arrange (iout);
+		//	arrange (curout);
+			
+		//	Queue_DrawBar (iout);
+		//	Queue_DrawBar (selmon);
+			return;
+		}
+	}
+	if (newtag) {
+		Output_TagSet (out, newtag);
+	}
+	shell_restack();
+//	arrange (curout);
+	
+//	Queue_DrawBar (curout);
 }
 
 
@@ -5000,11 +5080,10 @@ static void		Act_Output_TagSet		(struct wl_input_device *device, uint32_t time, 
 {
 	struct weston_surface* surf = gShell.compositor->input_device->current;
 	struct weston_output* out = CurrentOutput();
-	out->Tags = data;
-	shell_restack();
-	struct shell_surface *shsurf = Output_PanelGet(out);
-	desktop_shell_send_select_tag(gShell.child.desktop_shell, out->x, out->Tags);
-	gShell.prepare_event_sent = true;
+	
+	
+	Output_TagView (out, data);
+	
 	printf ("Output_TagSet %lx\n", out->Tags);
 }
 
@@ -5040,17 +5119,17 @@ static void		Act_Surf_Teleport		(struct wl_input_device *device, uint32_t time, 
 void layout(struct weston_output* output) {
 	unsigned int n, cols, rows, cn, rn, i, cx, cy, cw, ch, mw, mh, mx, my;
 	struct shell_surface* c;
-
-        mw = output->mm_width;
-        mh = output->mm_height;
-        mx = output->x;
-        my = output->y;
-        printf("mw:%d mh:%d mx:%d my:%d\n", mw, mh, mx, my);
-
-        n = wl_list_length(&output->surfaces);
+	
+	mw = output->mm_width;
+	mh = output->mm_height;
+	mx = output->x;
+	my = output->y;
+	printf("mw:%d mh:%d mx:%d my:%d\n", mw, mh, mx, my);
+	
+	n = wl_list_length(&output->surfaces);
 	if(n == 0)
 		return;
-
+	
 	/* grid dimensions */
 	for(cols = 0; cols <= n/2; cols++)
 		if(cols*cols >= n)
@@ -5058,12 +5137,12 @@ void layout(struct weston_output* output) {
 	if(n == 5) /* set layout against the general calculation: not 1:2:2, but 2:3 */
 		cols = 2;
 	rows = n/cols;
-
+	
 	/* window geometries */
 	cw = cols ? mw / cols : mw;
 	cn = 0; /* current column number */
 	rn = 0; /* current row number */
-        i = 0; 
+	i = 0; 
 	wl_list_for_each(c, &output->surfaces, O_link) {
 		if(i/rows + 1 > cols - n%cols)
 			rows = n/cols + 1;
@@ -5071,16 +5150,16 @@ void layout(struct weston_output* output) {
 		cx = mx + cn*cw;
 		cy = my + rn*ch;
 		//resize(c, cx, cy, cw, ch, False);
-                printf("x:%d y:%d w:%d h:%d", cx, cy, cw, ch);
-                struct weston_surface* es = c->surface;
-                weston_surface_configure(es, cx, cy, cw, ch);
-                wl_shell_surface_send_configure(&c->resource, 0, cw, ch);
+	//	printf("x:%d y:%d w:%d h:%d", cx, cy, cw, ch);
+		struct weston_surface* es = c->surface;
+		weston_surface_configure(es, cx, cy, cw, ch);
+		wl_shell_surface_send_configure(&c->resource, 0, cw, ch);
 		rn++;
 		if(rn >= rows) {
 			rn = 0;
 			cn++;
 		}
-                i++;
+		i++;
 	}
 }
 
