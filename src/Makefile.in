@@ -205,7 +205,8 @@ xserver_launcher_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 PROGRAMS = $(bin_PROGRAMS)
 am_weston_OBJECTS = weston-adwc.$(OBJEXT) \
 	weston-screenshooter.$(OBJEXT) \
-	weston-screenshooter-protocol.$(OBJEXT) weston-util.$(OBJEXT) \
+	weston-screenshooter-protocol.$(OBJEXT) \
+	weston-desktop-shell-protocol.$(OBJEXT) weston-util.$(OBJEXT) \
 	weston-matrix.$(OBJEXT)
 weston_OBJECTS = $(am_weston_OBJECTS)
 weston_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
@@ -444,6 +445,7 @@ weston_SOURCES = \
 	screenshooter.c				\
 	screenshooter-protocol.c		\
 	screenshooter-server-protocol.h		\
+	desktop-shell-protocol.c					\
 	util.c					\
 	matrix.c				\
 	matrix.h				\
@@ -697,6 +699,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tablet_shell_la-tablet-shell.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/wayland_backend_la-compositor-wayland.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/weston-adwc.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/weston-desktop-shell-protocol.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/weston-matrix.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/weston-screenshooter-protocol.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/weston-screenshooter.Po@am__quote@
@@ -888,6 +891,20 @@ weston-screenshooter-protocol.obj: screenshooter-protocol.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='screenshooter-protocol.c' object='weston-screenshooter-protocol.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -c -o weston-screenshooter-protocol.obj `if test -f 'screenshooter-protocol.c'; then $(CYGPATH_W) 'screenshooter-protocol.c'; else $(CYGPATH_W) '$(srcdir)/screenshooter-protocol.c'; fi`
+
+weston-desktop-shell-protocol.o: desktop-shell-protocol.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -MT weston-desktop-shell-protocol.o -MD -MP -MF $(DEPDIR)/weston-desktop-shell-protocol.Tpo -c -o weston-desktop-shell-protocol.o `test -f 'desktop-shell-protocol.c' || echo '$(srcdir)/'`desktop-shell-protocol.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/weston-desktop-shell-protocol.Tpo $(DEPDIR)/weston-desktop-shell-protocol.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='desktop-shell-protocol.c' object='weston-desktop-shell-protocol.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -c -o weston-desktop-shell-protocol.o `test -f 'desktop-shell-protocol.c' || echo '$(srcdir)/'`desktop-shell-protocol.c
+
+weston-desktop-shell-protocol.obj: desktop-shell-protocol.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -MT weston-desktop-shell-protocol.obj -MD -MP -MF $(DEPDIR)/weston-desktop-shell-protocol.Tpo -c -o weston-desktop-shell-protocol.obj `if test -f 'desktop-shell-protocol.c'; then $(CYGPATH_W) 'desktop-shell-protocol.c'; else $(CYGPATH_W) '$(srcdir)/desktop-shell-protocol.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/weston-desktop-shell-protocol.Tpo $(DEPDIR)/weston-desktop-shell-protocol.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='desktop-shell-protocol.c' object='weston-desktop-shell-protocol.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -c -o weston-desktop-shell-protocol.obj `if test -f 'desktop-shell-protocol.c'; then $(CYGPATH_W) 'desktop-shell-protocol.c'; else $(CYGPATH_W) '$(srcdir)/desktop-shell-protocol.c'; fi`
 
 weston-util.o: util.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -MT weston-util.o -MD -MP -MF $(DEPDIR)/weston-util.Tpo -c -o weston-util.o `test -f 'util.c' || echo '$(srcdir)/'`util.c

@@ -3875,6 +3875,17 @@ desktop_shell_select_tag(struct wl_client *client,
 			   uint32_t panel_no, uint32_t tag_no, uint32_t button, uint32_t modifier)
 {
 	printf("Tag No: %d %x %d\n", panel_no, tag_no, button);
+	
+	struct weston_output *out = CurrentOutput();
+	switch (button) {
+	case BTN_LEFT:
+		Output_TagView (out, tag_no);
+		break;
+	case BTN_RIGHT:
+		Output_TagView (out, out->Tags | tag_no);
+		break;
+	}
+	shell_restack();
 }
 
 static const struct desktop_shell_interface desktop_shell_implementation = {
