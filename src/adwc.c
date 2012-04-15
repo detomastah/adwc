@@ -4963,6 +4963,18 @@ static struct weston_output*	CurrentOutput	()
 
 
 
+static struct shell_surface*	
+Output_PanelGet		(struct weston_output *output)
+{
+	struct shell_surface *priv;
+	
+	wl_list_for_each(priv, &gShell.panels, link) {
+		if (priv->output == output) {
+			return priv;
+		}
+	}
+	return 0;
+}
 
 
 
@@ -4986,11 +4998,14 @@ static void		Act_Client_TagSet		(struct wl_input_device *device, uint32_t time, 
 
 static void		Act_Output_TagSet		(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
 {
+	struct weston_surface* surf = gShell.compositor->input_device->current;
 	struct weston_output* out = CurrentOutput();
 	out->Tags = data;
 	shell_restack();
+	struct shell_surface *shsurf = Output_PanelGet(out);
+	desktop_shell_send_select_tag(gShell.child.desktop_shell, out->x, out->Tags);
+	gShell.prepare_event_sent = true;
 	printf ("Output_TagSet %lx\n", out->Tags);
-	
 }
 
 static void		Act_Surf_Teleport		(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)

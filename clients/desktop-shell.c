@@ -186,23 +186,7 @@ panel_launcher_activate(struct panel_launcher *widget)
 		exit(1);
 	}
 }
-/*
-	cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
-	cairo_select_font_face(cr, "sans",
-			       CAIRO_FONT_SLANT_NORMAL,
-			       CAIRO_FONT_WEIGHT_BOLD);
-	cairo_set_font_size(cr, 14);
-	cairo_text_extents(cr, window->title, &extents);
-	x = (width - extents.width) / 2;
-	y = frame->margin + 8 - extents.y_bearing;
-	if (window->keyboard_device) {
-		cairo_move_to(cr, x + 1, y  + 1);
-		cairo_set_source_rgb(cr, 1, 1, 1);
-		cairo_show_text(cr, window->title);
-		cairo_move_to(cr, x, y);
-		cairo_set_source_rgb(cr, 0, 0, 0);
-		cairo_show_text(cr, window->title); 
- */
+
 static void
 panel_launcher_redraw_handler(struct widget *widget, void *data)
 {
@@ -724,8 +708,16 @@ desktop_shell_configure(void *data,
 {
 	struct window *window = wl_shell_surface_get_user_data(shell_surface);
 	struct surface *s = window_get_user_data(window);
-
 	s->configure(data, desktop_shell, edges, window, width, height);
+}
+
+static void
+desktop_shell_receive_tag(void *data,
+			struct desktop_shell *desktop_shell,
+			uint32_t x,
+		    uint32_t tag_no)
+{
+	printf("Desktop shell tag received %d %d\n", x, tag_no);
 }
 
 static void
@@ -747,7 +739,8 @@ desktop_shell_prepare_lock_surface(void *data,
 
 static const struct desktop_shell_listener listener = {
 	desktop_shell_configure,
-	desktop_shell_prepare_lock_surface
+	desktop_shell_prepare_lock_surface,
+	desktop_shell_receive_tag
 };
 
 static struct background *
