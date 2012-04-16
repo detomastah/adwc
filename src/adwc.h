@@ -332,15 +332,18 @@ struct weston_surface {
 	 * If you change anything, set dirty = 1.
 	 * That includes the transformations referenced from the list.
 	 */
+	 
+	struct weston_border border;
+	
 	struct {
 		int32_t x, y; /* surface translation on display */
 		int32_t width, height;
 
 		/* struct weston_transform */
 	//	struct wl_list transformation_list;
-
+		
 		int dirty;
-	} geometry;
+	} geometry, geometry_ours;
 
 	/* State derived from geometry state, read-only.
 	 * This is updated by weston_surface_update_transform().

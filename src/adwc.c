@@ -603,6 +603,7 @@ WL_EXPORT void
 weston_surface_configure(struct weston_surface *surface,
 			 GLfloat x, GLfloat y, int width, int height)
 {
+//	surface->geometry_prev = surface->geometry;
 	surface->geometry.x = x;
 	surface->geometry.y = y;
 	surface->geometry.width = width;
@@ -1352,6 +1353,8 @@ surface_frame(struct wl_client *client,
 	} else {
 		wl_list_insert(es->frame_callback_list.prev, &cb->link);
 	}
+	
+//	shell_restack ();
 }
 
 static void
@@ -1376,6 +1379,8 @@ surface_set_opaque_region(struct wl_client *client,
 	}
 
 	surface->geometry.dirty = 1;
+	
+//	shell_restack ();
 }
 
 static void
@@ -1398,8 +1403,20 @@ surface_set_input_region(struct wl_client *client,
 					  surface->geometry.width,
 					  surface->geometry.height);
 	}
-
-	weston_compositor_schedule_repaint(surface->compositor);
+	int restack = 0;
+	if (surface->border.left == 0 && surface->input.extents.x1 != 0) {
+		printf ("THIS IS IT  THIS IS IT  THIS IS IT  THIS IS IT  THIS IS IT  THIS IS IT  THIS IS IT  THIS IS IT  THIS IS IT  THIS IS IT\n");
+		restack = 1;
+	}
+	surface->border.left = surface->input.extents.x1;
+	surface->border.top = surface->input.extents.y1;
+	
+	surface->border.right = surface->geometry.width - surface->input.extents.x2;
+	surface->border.bottom = surface->geometry.height - surface->input.extents.y2;
+	
+	if (restack)
+		shell_restack ();
+//	weston_compositor_schedule_repaint(surface->compositor);
 }
 
 static const struct wl_surface_interface surface_interface = {
@@ -4413,7 +4430,7 @@ static void		map			(struct wl_shell *shell, struct weston_surface *surface, int3
 		break;
 	}
 	dTrace_L("");
-
+	
 	shell_restack();
 	
 //	if (surface_type == SHELL_SURFACE_TOPLEVEL)
@@ -4429,6 +4446,8 @@ static void		configure		(struct wl_shell *shell, struct weston_surface *surface,
 	shsurf = get_shell_surface(surface);
 	if (shsurf)
 		surface_type = shsurf->type;
+	
+//	surface->geometry_prev = surface->geometry;
 	
 	surface->geometry.x = x;
 	surface->geometry.y = y;
@@ -5002,7 +5021,7 @@ static struct weston_output*	CurrentOutput	()
 }
 
 
-bool	Tag_isVisible	(tTags tags)
+bool	Tag_isVisible		(tTags tags)
 {
 	struct weston_output *iout;
 	wl_list_for_each(iout, &gShell.compositor->output_list, link) {
@@ -5038,7 +5057,7 @@ bool	Output_TagisVisible		(struct weston_output *out, tTags tags)
 	return 0;
 }
 
-void	Output_TagSet		(struct weston_output *out, tTags tags)
+void	Output_TagSet			(struct weston_output *out, tTags tags)
 {
 	out->Tags = tags;
 	
@@ -5098,7 +5117,7 @@ void	ShSurf_LSet		(struct shell_surface* shsurf, uint8_t l)
 		return;
 	wl_list_remove (&shsurf->L_link);
 	shsurf->L = l;
-	wl_list_insert(&gShell.L[shsurf->L], &shsurf->L_link);
+	wl_list_insert(gShell.L[shsurf->L].prev, &shsurf->L_link);
         shell_restack();
 }
 
@@ -5119,7 +5138,7 @@ static void		Act_Client_TagSet		(struct wl_input_device *device, uint32_t time, 
 	
 }
 
-static void		Act_Client_Unfloat		(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
+static void		Act_Client_Unfloat	(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
 {
 	struct weston_surface* surf = gShell.compositor->input_device->current;
 	if (!surf)
@@ -5204,8 +5223,27 @@ void layout(struct weston_output* output) {
 		//resize(c, cx, cy, cw, ch, False);
 	//	printf("x:%d y:%d w:%d h:%d", cx, cy, cw, ch);
 		struct weston_surface* es = c->surface;
-		weston_surface_configure(es, cx - 31, cy - 31, cw + 62, ch + 62);
-		wl_shell_surface_send_configure(&c->resource, 0, cw + 62, ch + 62);
+		int32_t esml = es->border.left;
+		int32_t esmt = es->border.top;
+		int32_t esmr = es->border.right;
+		int32_t esmb = es->border.bottom;/**/
+	/*	int32_t esml = 32;
+		int32_t esmt = 32;
+		int32_t esmr = 32;
+		int32_t esmb = 32;/**/
+		if (es->geometry_ours.x != cx - esml
+			|| es->geometry_ours.y != cy - esmt
+			|| es->geometry_ours.width != cw + esml + esmr
+			|| es->geometry_ours.height != ch + esmt + esmb
+		) {
+			es->geometry_ours.x = cx - esml;
+			es->geometry_ours.y = cy - esmt;
+			es->geometry_ours.width = cw + esml + esmr;
+			es->geometry_ours.height = ch + esmt + esmb;
+			
+			weston_surface_configure(es, cx - esml, cy - esmt, cw + esml + esmr, ch + esmt + esmb);
+			wl_shell_surface_send_configure(&c->resource, 0, cw + esml + esmr, ch + esmt + esmb);
+		}
 		rn++;
 		if(rn >= rows) {
 			rn = 0;
@@ -5271,7 +5309,7 @@ void shell_restack()
 		layout(output);
 	}
 	
-	weston_compositor_damage_all(gShell.compositor);
+//	weston_compositor_damage_all(gShell.compositor);
 	dTrace_L("");
 }
 
