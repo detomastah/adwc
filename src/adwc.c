@@ -50,6 +50,7 @@
 #include "config.h"
 
 #include <wayland-server.h>
+
 //#include "compositor.h"
 #include "adwc.h"
 #include "desktop-shell-server-protocol.h"
@@ -80,7 +81,7 @@ static inline double	SC_time_Diff	(tSC_time* pt)
 	clock_gettime (CLOCK_REALTIME, &time);
 	
 	pt->sec = time.tv_sec - pt->sec;
-	if (pt->nsec <= time.tv_nsec) {
+	if ((uintptr_t)pt->nsec <= (uintptr_t)time.tv_nsec) {
 		pt->nsec = time.tv_nsec - pt->nsec;
 	} else {
 		pt->sec -= 1;
@@ -267,9 +268,20 @@ empty_region(pixman_region32_t *region)
 }
 
 
+
+
+tWin *			get_shell_surface					(tSurf *surface);
+void				surface_compute_bbox				(tSurf *surface, int32_t sx, int32_t sy, int32_t width, int32_t height, pixman_region32_t *bbox);
+
+static void			handle_drag_surface_destroy		(struct wl_listener *listener, void *data);
+static void			device_handle_new_drag_icon		(struct wl_listener *listener, void *data);
+
+
+
+
 /** ************************************ weston_surface ************************************ **/
 
-WL_EXPORT tSurf *	weston_surface_create	(tComp *compositor)
+WL_EXPORT tSurf*		weston_surface_create				(tComp *compositor)
 {
 	dTrace_E("");
 	tSurf *surface;
@@ -484,7 +496,7 @@ tSurf*	weston_compositor_pick_surface		(tComp *compositor, int32_t x, int32_t y,
 	return NULL;
 }
 
-tWin *	get_shell_surface					(tSurf *surface);
+
 void				activate						(struct wl_shell *shell, tSurf *es, tFocus *device);
 
 void				weston_device_repick				(struct wl_input_device *device)
@@ -561,7 +573,7 @@ void				destroy_surface					(struct wl_resource *resource)
 
 	if (surface->buffer)
 		wl_list_remove(&surface->buffer_destroy_listener.link);
-
+	
 	if (surface->image != EGL_NO_IMAGE_KHR)
 		compositor->destroy_image(compositor->display,
 					  surface->image);
@@ -730,8 +742,7 @@ WL_EXPORT void		weston_surface_draw				(tSurf *es, tOutput *output, pixman_regio
 		ec->current_shader = es->shader;
 	}
 
-	glUniformMatrix4fv(es->shader->proj_uniform,
-			   1, GL_FALSE, output->matrix.d);
+	glUniformMatrix4fv(es->shader->proj_uniform, 1, GL_FALSE, output->matrix.d);
 	glUniform1i(es->shader->tex_uniform, 0);
 	glUniform4fv(es->shader->color_uniform, 1, es->color);
 	glUniform1f(es->shader->alpha_uniform, es->alpha / 255.0);
@@ -810,37 +821,6 @@ WL_EXPORT void		weston_output_damage				(tOutput *output)
 	weston_compositor_schedule_repaint(compositor);
 }
 
-/*
-static void
-fade_frame(struct weston_animation *animation,
-	   tOutput *output, uint32_t msecs)
-{
-	tComp *compositor =
-		container_of(animation,
-			     tComp, fade.animation);
-	tSurf *surface;
-
-	surface = compositor->fade.surface;
-	weston_spring_update(&compositor->fade.spring, msecs);
-	weston_surface_set_color(surface, 0.0, 0.0, 0.0,
-				 compositor->fade.spring.current);
-	weston_surface_damage(surface);
-
-	if (weston_spring_done(&compositor->fade.spring)) {
-		compositor->fade.spring.current =
-			compositor->fade.spring.target;
-		wl_list_remove(&animation->link);
-		wl_list_init(&animation->link);
-
-		if (compositor->fade.spring.current < 0.001) {
-			destroy_surface(&surface->surface.resource);
-			compositor->fade.surface = NULL;
-		} else if (compositor->fade.spring.current > 0.999) {
-			compositor->state = WESTON_COMPOSITOR_SLEEPING;
-			wl_signal_emit(&compositor->lock_signal, compositor);
-		}
-	}
-}*/
 
 struct weston_frame_callback {
 	struct wl_resource resource;
@@ -972,15 +952,8 @@ static void			idle_repaint					(void *data)
 	weston_output_finish_frame(output, weston_compositor_get_time());
 }
 
-/*
-WL_EXPORT void		weston_layer_init					(struct weston_layer *layer, struct wl_list *below)
-{
-	wl_list_init(&layer->surface_list);
-	wl_list_insert(below, &layer->link);
-}
-*/
-WL_EXPORT void
-weston_compositor_schedule_repaint(tComp *compositor)
+
+WL_EXPORT void		weston_compositor_schedule_repaint		(tComp *compositor)
 {
 	tOutput *output;
 	struct wl_event_loop *loop;
@@ -1004,47 +977,13 @@ weston_compositor_schedule_repaint(tComp *compositor)
 	}
 }
 
-/*
-WL_EXPORT void
-weston_compositor_fade(tComp *compositor, float tint)
-{
-	tSurf *surface;
-	int done;
 
-	done = weston_spring_done(&compositor->fade.spring);
-	compositor->fade.spring.target = tint;
-	if (weston_spring_done(&compositor->fade.spring))
-		return;
-
-	if (done)
-		compositor->fade.spring.timestamp =
-			weston_compositor_get_time();
-
-	if (compositor->fade.surface == NULL) {
-		surface = weston_surface_create(compositor);
-		weston_surface_configure(surface, 0, 0, 8192, 8192);
-		weston_surface_set_color(surface, 0.0, 0.0, 0.0, 0.0);
-		wl_list_insert(&compositor->fade_layer.surface_list,
-			       &surface->layer_link);
-		weston_surface_assign_output(surface);
-		compositor->fade.surface = surface;
-		pixman_region32_init(&surface->input);
-	}
-
-	weston_surface_damage(compositor->fade.surface);
-	if (wl_list_empty(&compositor->fade.animation.link))
-		wl_list_insert(compositor->animation_list.prev,
-			       &compositor->fade.animation.link);
-}*/
-
-static void
-surface_destroy(struct wl_client *client, struct wl_resource *resource)
+static void			surface_destroy					(struct wl_client *client, struct wl_resource *resource)
 {
 	wl_resource_destroy(resource);
 }
 
-WL_EXPORT void
-weston_surface_assign_output(tSurf *es)
+WL_EXPORT void		weston_surface_assign_output			(tSurf *es)
 {
 	tComp *ec = gShell.pEC;
 	tOutput *output, *new_output;
@@ -1086,10 +1025,17 @@ weston_surface_assign_output(tSurf *es)
 	}
 }
 
-static void
-surface_attach(struct wl_client *client,
-	       struct wl_resource *resource,
-	       struct wl_resource *buffer_resource, int32_t sx, int32_t sy)
+
+
+
+/** *********************************** wayland callbacks ************************************ **/
+
+static const struct wl_surface_interface surface_interface;
+static const struct wl_region_interface region_interface;
+static const struct wl_input_device_interface input_device_interface;
+
+
+static void			surface_attach					(struct wl_client *client, struct wl_resource *resource, struct wl_resource *buffer_resource, int32_t sx, int32_t sy)
 {
 	tSurf *es = resource->data;
 	struct wl_buffer *buffer = NULL;
@@ -1103,10 +1049,7 @@ surface_attach(struct wl_client *client,
 		es->configure(es, sx, sy);
 }
 
-static void
-surface_damage(struct wl_client *client,
-	       struct wl_resource *resource,
-	       int32_t x, int32_t y, int32_t width, int32_t height)
+static void			surface_damage					(struct wl_client *client, struct wl_resource *resource, int32_t x, int32_t y, int32_t width, int32_t height)
 {
 	tSurf *es = resource->data;
 
@@ -1124,8 +1067,7 @@ surface_damage(struct wl_client *client,
 	}
 }
 
-static void
-destroy_frame_callback(struct wl_resource *resource)
+static void			destroy_frame_callback				(struct wl_resource *resource)
 {
 	struct weston_frame_callback *cb = resource->data;
 
@@ -1133,9 +1075,7 @@ destroy_frame_callback(struct wl_resource *resource)
 	free(cb);
 }
 
-static void
-surface_frame(struct wl_client *client,
-	      struct wl_resource *resource, uint32_t callback)
+static void			surface_frame					(struct wl_client *client, struct wl_resource *resource, uint32_t callback)
 {
 	struct weston_frame_callback *cb;
 	tSurf *es = resource->data;
@@ -1164,10 +1104,7 @@ surface_frame(struct wl_client *client,
 //	shell_restack ();
 }
 
-static void
-surface_set_opaque_region(struct wl_client *client,
-			  struct wl_resource *resource,
-			  struct wl_resource *region_resource)
+static void			surface_set_opaque_region			(struct wl_client *client, struct wl_resource *resource, struct wl_resource *region_resource)
 {
 	tSurf *surface = resource->data;
 	struct weston_region *region;
@@ -1190,10 +1127,7 @@ surface_set_opaque_region(struct wl_client *client,
 //	shell_restack ();
 }
 
-static void
-surface_set_input_region(struct wl_client *client,
-			 struct wl_resource *resource,
-			 struct wl_resource *region_resource)
+static void			surface_set_input_region			(struct wl_client *client, struct wl_resource *resource, struct wl_resource *region_resource)
 {
 	tSurf *surface = resource->data;
 	struct weston_region *region;
@@ -1226,18 +1160,7 @@ surface_set_input_region(struct wl_client *client,
 //	weston_compositor_schedule_repaint(gShell.pEC);
 }
 
-static const struct wl_surface_interface surface_interface = {
-	surface_destroy,
-	surface_attach,
-	surface_damage,
-	surface_frame,
-	surface_set_opaque_region,
-	surface_set_input_region
-};
-
-static void
-compositor_create_surface(struct wl_client *client,
-			  struct wl_resource *resource, uint32_t id)
+static void			compositor_create_surface			(struct wl_client *client, struct wl_resource *resource, uint32_t id)
 {
 	dTrace_E("");
 	tComp *ec = resource->data;
@@ -1261,8 +1184,7 @@ compositor_create_surface(struct wl_client *client,
 	dTrace_L("");
 }
 
-static void
-destroy_region(struct wl_resource *resource)
+static void			destroy_region					(struct wl_resource *resource)
 {
 	struct weston_region *region =
 		container_of(resource, struct weston_region, resource);
@@ -1271,15 +1193,12 @@ destroy_region(struct wl_resource *resource)
 	free(region);
 }
 
-static void
-region_destroy(struct wl_client *client, struct wl_resource *resource)
+static void			region_destroy					(struct wl_client *client, struct wl_resource *resource)
 {
 	wl_resource_destroy(resource);
 }
 
-static void
-region_add(struct wl_client *client, struct wl_resource *resource,
-	   int32_t x, int32_t y, int32_t width, int32_t height)
+static void			region_add						(struct wl_client *client, struct wl_resource *resource, int32_t x, int32_t y, int32_t width, int32_t height)
 {
 	struct weston_region *region = resource->data;
 
@@ -1287,9 +1206,7 @@ region_add(struct wl_client *client, struct wl_resource *resource,
 				   x, y, width, height);
 }
 
-static void
-region_subtract(struct wl_client *client, struct wl_resource *resource,
-		int32_t x, int32_t y, int32_t width, int32_t height)
+static void			region_subtract					(struct wl_client *client, struct wl_resource *resource, int32_t x, int32_t y, int32_t width, int32_t height)
 {
 	struct weston_region *region = resource->data;
 	pixman_region32_t rect;
@@ -1299,15 +1216,7 @@ region_subtract(struct wl_client *client, struct wl_resource *resource,
 	pixman_region32_fini(&rect);
 }
 
-static const struct wl_region_interface region_interface = {
-	region_destroy,
-	region_add,
-	region_subtract
-};
-
-static void
-compositor_create_region(struct wl_client *client,
-			 struct wl_resource *resource, uint32_t id)
+static void			compositor_create_region			(struct wl_client *client, struct wl_resource *resource, uint32_t id)
 {
 	struct weston_region *region;
 
@@ -1330,75 +1239,20 @@ compositor_create_region(struct wl_client *client,
 	wl_client_add_resource(client, &region->resource);
 }
 
-static const struct wl_compositor_interface compositor_interface = {
-	compositor_create_surface,
-	compositor_create_region
-};
 
-WL_EXPORT void
-weston_compositor_wake(tComp *compositor)
+static void			destroy_device_saved_kbd_focus		(struct wl_listener *listener, void *data)
 {
-	compositor->state = WESTON_COMPOSITOR_ACTIVE;
-//	weston_compositor_fade(compositor, 0.0);
+	tFocus *wd;
 
-	wl_event_source_timer_update(compositor->idle_source,
-				     compositor->idle_time * 1000);
+	wd = container_of(listener, tFocus,
+			  saved_kbd_focus_listener);
+
+	wd->saved_kbd_focus = NULL;
 }
 
-static void
-weston_compositor_dpms_on(tComp *compositor)
-{
-        tOutput *output;
 
-        wl_list_for_each(output, &compositor->output_list, link)
-		if (output->set_dpms)
-			output->set_dpms(output, WESTON_DPMS_ON);
-}
 
-WL_EXPORT void
-weston_compositor_activity(tComp *compositor)
-{
-	if (compositor->state == WESTON_COMPOSITOR_ACTIVE) {
-		weston_compositor_wake(compositor);
-	} else {
-		weston_compositor_dpms_on(compositor);
-		wl_signal_emit(&compositor->unlock_signal, compositor);
-	}
-}
-
-static void
-weston_compositor_idle_inhibit(tComp *compositor)
-{
-	weston_compositor_activity(compositor);
-	compositor->idle_inhibit++;
-}
-
-static void
-weston_compositor_idle_release(tComp *compositor)
-{
-	compositor->idle_inhibit--;
-	weston_compositor_activity(compositor);
-}
-
-static int
-idle_handler(void *data)
-{
-	tComp *compositor = data;
-
-	if (compositor->idle_inhibit)
-		return 1;
-
-//	weston_compositor_fade(compositor, 1.0);
-
-	return 1;
-}
-
-static  void
-weston_input_update_drag_surface(struct wl_input_device *input_device,
-				 int dx, int dy);
-
-WL_EXPORT void
-notify_motion(struct wl_input_device *device, uint32_t time, int x, int y)
+WL_EXPORT void		notify_motion					(struct wl_input_device *device, uint32_t time, int x, int y)
 {
 	tOutput *output;
 	const struct wl_pointer_grab_interface *interface;
@@ -1467,22 +1321,7 @@ notify_motion(struct wl_input_device *device, uint32_t time, int x, int y)
 	}
 }
 
-WL_EXPORT void
-weston_surface_activate(tSurf *surface,
-			tFocus *device)
-{
-	tComp *compositor = device->compositor;
-
-	wl_input_device_set_keyboard_focus(&device->input_device,
-					   &surface->surface);
-	wl_data_device_set_keyboard_focus(&device->input_device);
-
-	wl_signal_emit(&compositor->activate_signal, surface);
-}
-
-WL_EXPORT void
-notify_button(struct wl_input_device *device,
-	      uint32_t time, int32_t button, int32_t state)
+WL_EXPORT void		notify_button					(struct wl_input_device *device, uint32_t time, int32_t button, int32_t state)
 {
 	tFocus *wd = (tFocus *) device;
 	tComp *compositor = wd->compositor;
@@ -1510,9 +1349,7 @@ notify_button(struct wl_input_device *device,
 			wl_display_get_serial(compositor->wl_display);
 }
 
-WL_EXPORT void
-notify_axis(struct wl_input_device *device,
-	      uint32_t time, uint32_t axis, int32_t value)
+WL_EXPORT void		notify_axis						(struct wl_input_device *device, uint32_t time, uint32_t axis, int32_t value)
 {
 	tFocus *wd = (tFocus *) device;
 	tComp *compositor = wd->compositor;
@@ -1530,42 +1367,7 @@ notify_axis(struct wl_input_device *device,
 				WL_INPUT_DEVICE_AXIS, time, axis, value);
 }
 
-static void
-update_modifier_state(tFocus *device,
-		      uint32_t key, uint32_t state)
-{
-	uint32_t modifier;
-
-	switch (key) {
-	case KEY_LEFTCTRL:
-	case KEY_RIGHTCTRL:
-		modifier = MODIFIER_CTRL;
-		break;
-
-	case KEY_LEFTALT:
-	case KEY_RIGHTALT:
-		modifier = MODIFIER_ALT;
-		break;
-
-	case KEY_LEFTMETA:
-	case KEY_RIGHTMETA:
-		modifier = MODIFIER_SUPER;
-		break;
-
-	default:
-		modifier = 0;
-		break;
-	}
-
-	if (state)
-		device->modifier_state |= modifier;
-	else
-		device->modifier_state &= ~modifier;
-}
-
-WL_EXPORT void
-notify_key(struct wl_input_device *device,
-	   uint32_t time, uint32_t key, uint32_t state)
+WL_EXPORT void		notify_key						(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t state)
 {
 	tFocus *wd = (tFocus *) device;
 	tComp *compositor = wd->compositor;
@@ -1599,9 +1401,7 @@ notify_key(struct wl_input_device *device,
 					      time, key, state);
 }
 
-WL_EXPORT void
-notify_pointer_focus(struct wl_input_device *device,
-		     tOutput *output, int32_t x, int32_t y)
+WL_EXPORT void		notify_pointer_focus				(struct wl_input_device *device, tOutput *output, int32_t x, int32_t y)
 {
 	tFocus *wd = (tFocus *) device;
 	tComp *compositor = wd->compositor;
@@ -1620,19 +1420,8 @@ notify_pointer_focus(struct wl_input_device *device,
 	}
 }
 
-static void
-destroy_device_saved_kbd_focus(struct wl_listener *listener, void *data)
-{
-	tFocus *wd;
 
-	wd = container_of(listener, tFocus,
-			  saved_kbd_focus_listener);
-
-	wd->saved_kbd_focus = NULL;
-}
-
-WL_EXPORT void
-notify_keyboard_focus(struct wl_input_device *device, struct wl_array *keys)
+WL_EXPORT void		notify_keyboard_focus				(struct wl_input_device *device, struct wl_array *keys)
 {
 	tFocus *wd =
 		(tFocus *) device;
@@ -1666,8 +1455,7 @@ notify_keyboard_focus(struct wl_input_device *device, struct wl_array *keys)
 
 		if (surface) {
 			wd->saved_kbd_focus = surface;
-			wd->saved_kbd_focus_listener.notify =
-				destroy_device_saved_kbd_focus;
+			wd->saved_kbd_focus_listener.notify = destroy_device_saved_kbd_focus;
 			wl_signal_add(&surface->resource.destroy_signal,
 				      &wd->saved_kbd_focus_listener);
 		}
@@ -1680,93 +1468,7 @@ notify_keyboard_focus(struct wl_input_device *device, struct wl_array *keys)
 	}
 }
 
-/* TODO: share this function with wayland-server.c */
-static struct wl_resource *
-find_resource_for_surface(struct wl_list *list, struct wl_surface *surface)
-{
-        struct wl_resource *r;
-
-        if (!surface)
-                return NULL;
-
-        wl_list_for_each(r, list, link) {
-                if (r->client == surface->resource.client)
-                        return r;
-        }
-
-        return NULL;
-}
-
-static void
-lose_touch_focus_resource(struct wl_listener *listener, void *data)
-{
-	tFocus *device =
-		container_of(listener, tFocus,
-			     touch_focus_resource_listener);
-
-	device->touch_focus_resource = NULL;
-}
-
-static void
-lose_touch_focus(struct wl_listener *listener, void *data)
-{
-	tFocus *device =
-		container_of(listener, tFocus,
-			     touch_focus_listener);
-
-	device->touch_focus = NULL;
-}
-
-static void
-touch_set_focus(tFocus *device,
-		struct wl_surface *surface)
-{
-	struct wl_input_device *input_device = &device->input_device;
-	struct wl_resource *resource;
-
-	if (device->touch_focus == surface)
-		return;
-
-	if (surface) {
-		resource =
-			find_resource_for_surface(&input_device->resource_list,
-						  surface);
-		if (!resource) {
-			fprintf(stderr, "couldn't find resource\n");
-			return;
-		}
-
-		device->touch_focus_resource_listener.notify =
-			lose_touch_focus_resource;
-		wl_signal_add(&resource->destroy_signal,
-			      &device->touch_focus_resource_listener);
-		device->touch_focus_listener.notify = lose_touch_focus;
-		wl_signal_add(&surface->resource.destroy_signal,
-			       &device->touch_focus_listener);
-
-		device->touch_focus = surface;
-		device->touch_focus_resource = resource;
-	} else {
-		if (device->touch_focus)
-			wl_list_remove(&device->touch_focus_listener.link);
-		if (device->touch_focus_resource)
-			wl_list_remove(&device->touch_focus_resource_listener.link);
-		device->touch_focus = NULL;
-		device->touch_focus_resource = NULL;
-	}
-}
-
-/**
- * notify_touch - emulates button touches and notifies surfaces accordingly.
- *
- * It assumes always the correct cycle sequence until it gets here: touch_down
- * → touch_update → ... → touch_update → touch_end. The driver is responsible
- * for sending along such order.
- *
- */
-WL_EXPORT void
-notify_touch(struct wl_input_device *device, uint32_t time, int touch_id,
-             int x, int y, int touch_type)
+WL_EXPORT void		notify_touch					(struct wl_input_device *device, uint32_t time, int touch_id, int x, int y, int touch_type)
 {
 	tFocus *wd = (tFocus *) device;
 	tComp *ec = wd->compositor;
@@ -1819,6 +1521,8 @@ notify_touch(struct wl_input_device *device, uint32_t time, int touch_id,
 	}
 }
 
+
+
 static void
 input_device_attach(struct wl_client *client,
 		    struct wl_resource *resource,
@@ -1866,59 +1570,156 @@ input_device_attach(struct wl_client *client,
 		       0, 0, buffer->width, buffer->height);
 }
 
+
+
+static const struct wl_surface_interface surface_interface = {
+	surface_destroy,
+	surface_attach,
+	surface_damage,
+	surface_frame,
+	surface_set_opaque_region,
+	surface_set_input_region
+};
+static const struct wl_region_interface region_interface = {
+	region_destroy,
+	region_add,
+	region_subtract
+};
 static const struct wl_input_device_interface input_device_interface = {
 	input_device_attach,
 };
 
-static void
-handle_drag_surface_destroy(struct wl_listener *listener, void *data)
+
+/** *********************************** Main ************************************ **/
+
+static const struct wl_compositor_interface compositor_interface = {
+	compositor_create_surface,
+	compositor_create_region
+};
+
+WL_EXPORT void		weston_compositor_wake				(tComp *compositor)
 {
-	tFocus *device;
+	compositor->state = WESTON_COMPOSITOR_ACTIVE;
+//	weston_compositor_fade(compositor, 0.0);
 
-	device = container_of(listener, tFocus,
-			      drag_surface_destroy_listener);
-
-	device->drag_surface = NULL;
+	wl_event_source_timer_update(compositor->idle_source,
+				     compositor->idle_time * 1000);
 }
 
-static void unbind_input_device(struct wl_resource *resource)
+static void			weston_compositor_dpms_on			(tComp *compositor)
+{
+        tOutput *output;
+
+        wl_list_for_each(output, &compositor->output_list, link)
+		if (output->set_dpms)
+			output->set_dpms(output, WESTON_DPMS_ON);
+}
+
+WL_EXPORT void		weston_compositor_activity			(tComp *compositor)
+{
+	if (compositor->state == WESTON_COMPOSITOR_ACTIVE) {
+		weston_compositor_wake(compositor);
+	} else {
+		weston_compositor_dpms_on(compositor);
+		wl_signal_emit(&compositor->unlock_signal, compositor);
+	}
+}
+
+void				weston_compositor_idle_inhibit		(tComp *compositor)
+{
+	weston_compositor_activity(compositor);
+	compositor->idle_inhibit++;
+}
+
+void				weston_compositor_idle_release		(tComp *compositor)
+{
+	compositor->idle_inhibit--;
+	weston_compositor_activity(compositor);
+}
+
+static int			idle_handler					(void *data)
+{
+	tComp *compositor = data;
+
+	if (compositor->idle_inhibit)
+		return 1;
+
+//	weston_compositor_fade(compositor, 1.0);
+
+	return 1;
+}
+
+void				weston_input_update_drag_surface		(struct wl_input_device *input_device, int dx, int dy);
+
+WL_EXPORT void		weston_surface_activate				(tSurf *surface, tFocus *device)
+{
+	tComp *compositor = device->compositor;
+
+	wl_input_device_set_keyboard_focus(&device->input_device,
+					   &surface->surface);
+	wl_data_device_set_keyboard_focus(&device->input_device);
+
+	wl_signal_emit(&compositor->activate_signal, surface);
+}
+
+
+
+void				update_modifier_state				(tFocus *device, uint32_t key, uint32_t state)
+{
+	uint32_t modifier;
+
+	switch (key) {
+	case KEY_LEFTCTRL:
+	case KEY_RIGHTCTRL:
+		modifier = MODIFIER_CTRL;
+		break;
+
+	case KEY_LEFTALT:
+	case KEY_RIGHTALT:
+		modifier = MODIFIER_ALT;
+		break;
+
+	case KEY_LEFTMETA:
+	case KEY_RIGHTMETA:
+		modifier = MODIFIER_SUPER;
+		break;
+
+	default:
+		modifier = 0;
+		break;
+	}
+
+	if (state)
+		device->modifier_state |= modifier;
+	else
+		device->modifier_state &= ~modifier;
+}
+
+
+
+
+
+static void			unbind_input_device			(struct wl_resource *resource)
 {
 	wl_list_remove(&resource->link);
 	free(resource);
 }
 
-static void
-bind_input_device(struct wl_client *client,
-		  void *data, uint32_t version, uint32_t id)
+static void			bind_input_device				(struct wl_client *client, void *data, uint32_t version, uint32_t id)
 {
 	struct wl_input_device *device = data;
 	struct wl_resource *resource;
 
-	resource = wl_client_add_object(client, &wl_input_device_interface,
-					&input_device_interface, id, data);
+	resource = wl_client_add_object(client, &wl_input_device_interface, &input_device_interface, id, data);
 	wl_list_insert(&device->resource_list, &resource->link);
 	resource->destroy = unbind_input_device;
 }
 
-static void
-device_handle_new_drag_icon(struct wl_listener *listener, void *data)
-{
-	tFocus *device;
-
-	device = container_of(listener, tFocus,
-			      new_drag_icon_listener);
-
-	weston_input_update_drag_surface(&device->input_device, 0, 0);
-}
-
-WL_EXPORT void
-weston_input_device_init(tFocus *device,
-			 tComp *ec)
+WL_EXPORT void		weston_input_device_init			(tFocus *device, tComp *ec)
 {
 	wl_input_device_init(&device->input_device);
 
-	wl_display_add_global(ec->wl_display, &wl_input_device_interface,
-			      device, bind_input_device);
+	wl_display_add_global(ec->wl_display, &wl_input_device_interface, device, bind_input_device);
 
 	device->sprite = weston_surface_create(ec);
 	device->sprite->surface.resource.data = device->sprite;
@@ -1929,18 +1730,15 @@ weston_input_device_init(tFocus *device,
 	device->modifier_state = 0;
 	device->num_tp = 0;
 
-	device->drag_surface_destroy_listener.notify =
-		handle_drag_surface_destroy;
+	device->drag_surface_destroy_listener.notify = handle_drag_surface_destroy;
 
 	wl_list_insert(ec->input_device_list.prev, &device->link);
 
 	device->new_drag_icon_listener.notify = device_handle_new_drag_icon;
-	wl_signal_add(&device->input_device.drag_icon_signal,
-		      &device->new_drag_icon_listener);
+	wl_signal_add(&device->input_device.drag_icon_signal, &device->new_drag_icon_listener);
 }
 
-WL_EXPORT void
-weston_input_device_release(tFocus *device)
+WL_EXPORT void		weston_input_device_release		(tFocus *device)
 {
 	wl_list_remove(&device->link);
 	/* The global object is destroyed at wl_display_destroy() time. */
@@ -1951,17 +1749,128 @@ weston_input_device_release(tFocus *device)
 	wl_input_device_release(&device->input_device);
 }
 
+
+
+
+
+/* TODO: share this function with wayland-server.c */
+static struct wl_resource *
+find_resource_for_surface(struct wl_list *list, struct wl_surface *surface)
+{
+        struct wl_resource *r;
+
+        if (!surface)
+                return NULL;
+
+        wl_list_for_each(r, list, link) {
+                if (r->client == surface->resource.client)
+                        return r;
+        }
+
+        return NULL;
+}
+
 static void
-drag_surface_configure(tSurf *es, int32_t sx, int32_t sy)
+lose_touch_focus_resource(struct wl_listener *listener, void *data)
+{
+	tFocus *device =
+		container_of(listener, tFocus,
+			     touch_focus_resource_listener);
+
+	device->touch_focus_resource = NULL;
+}
+
+static void
+lose_touch_focus(struct wl_listener *listener, void *data)
+{
+	tFocus *device =
+		container_of(listener, tFocus,
+			     touch_focus_listener);
+
+	device->touch_focus = NULL;
+}
+
+void	 	touch_set_focus		(tFocus *device, struct wl_surface *surface)
+{
+	struct wl_input_device *input_device = &device->input_device;
+	struct wl_resource *resource;
+
+	if (device->touch_focus == surface)
+		return;
+
+	if (surface) {
+		resource =
+			find_resource_for_surface(&input_device->resource_list,
+						  surface);
+		if (!resource) {
+			fprintf(stderr, "couldn't find resource\n");
+			return;
+		}
+
+		device->touch_focus_resource_listener.notify =
+			lose_touch_focus_resource;
+		wl_signal_add(&resource->destroy_signal,
+			      &device->touch_focus_resource_listener);
+		device->touch_focus_listener.notify = lose_touch_focus;
+		wl_signal_add(&surface->resource.destroy_signal,
+			       &device->touch_focus_listener);
+
+		device->touch_focus = surface;
+		device->touch_focus_resource = resource;
+	} else {
+		if (device->touch_focus)
+			wl_list_remove(&device->touch_focus_listener.link);
+		if (device->touch_focus_resource)
+			wl_list_remove(&device->touch_focus_resource_listener.link);
+		device->touch_focus = NULL;
+		device->touch_focus_resource = NULL;
+	}
+}
+
+/**
+ * notify_touch - emulates button touches and notifies surfaces accordingly.
+ *
+ * It assumes always the correct cycle sequence until it gets here: touch_down
+ * → touch_update → ... → touch_update → touch_end. The driver is responsible
+ * for sending along such order.
+ *
+ */
+
+
+
+
+
+
+/** *********************************** Drag surfaces ************************************ **/
+
+static void			handle_drag_surface_destroy		(struct wl_listener *listener, void *data)
+{
+	tFocus *device;
+
+	device = container_of(listener, tFocus,
+			      drag_surface_destroy_listener);
+
+	device->drag_surface = NULL;
+}
+
+static void			device_handle_new_drag_icon		(struct wl_listener *listener, void *data)
+{
+	tFocus *device;
+
+	device = container_of(listener, tFocus,
+			      new_drag_icon_listener);
+
+	weston_input_update_drag_surface(&device->input_device, 0, 0);
+}
+
+static void			drag_surface_configure			(tSurf *es, int32_t sx, int32_t sy)
 {
 	weston_surface_configure(es,
 				 es->geometry.x + sx, es->geometry.y + sy,
 				 es->buffer->width, es->buffer->height);
 }
 
-static int
-device_setup_new_drag_surface(tFocus *device,
-			      tSurf *surface)
+static int			device_setup_new_drag_surface		(tFocus *device, tSurf *surface)
 {
 	struct wl_input_device *input_device = &device->input_device;
 
@@ -1985,8 +1894,7 @@ device_setup_new_drag_surface(tFocus *device,
 	return 1;
 }
 
-static void
-device_release_drag_surface(tFocus *device)
+static void			device_release_drag_surface		(tFocus *device)
 {
 	device->drag_surface->configure = NULL;
 	undef_region(&device->drag_surface->input);
@@ -1994,8 +1902,7 @@ device_release_drag_surface(tFocus *device)
 	device->drag_surface = NULL;
 }
 
-static void
-device_map_drag_surface(tFocus *device)
+static void			device_map_drag_surface			(tFocus *device)
 {
 	if (weston_surface_is_mapped(device->drag_surface) || !device->drag_surface->buffer)
 		return;
@@ -2006,9 +1913,7 @@ device_map_drag_surface(tFocus *device)
 	empty_region(&device->drag_surface->input);
 }
 
-static  void
-weston_input_update_drag_surface(struct wl_input_device *input_device,
-				 int dx, int dy)
+void				weston_input_update_drag_surface	(struct wl_input_device *input_device, int dx, int dy)
 {
 	int surface_changed = 0;
 	tFocus *device = (tFocus *)
@@ -2053,11 +1958,12 @@ weston_input_update_drag_surface(struct wl_input_device *input_device,
 				    device->drag_surface->geometry.y + dy);
 }
 
-WL_EXPORT void
-weston_compositor_update_drag_surfaces(tComp *compositor)
+WL_EXPORT void		weston_compositor_update_drag_surfaces(tComp *compositor)
 {
 	weston_input_update_drag_surface(compositor->input_device, 0, 0);
 }
+
+
 
 static void
 bind_output(struct wl_client *client,
@@ -2086,6 +1992,24 @@ bind_output(struct wl_client *client,
 				    mode->refresh);
 	}
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 static const char vertex_shader[] =
 	"uniform mat4 proj;\n"

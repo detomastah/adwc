@@ -568,8 +568,8 @@ void
 notify_touch(struct wl_input_device *device, uint32_t time, int touch_id,
 	     int x, int y, int touch_type);
 
-void
-weston_layer_init(struct weston_layer *layer, struct wl_list *below);
+//void
+//weston_layer_init(struct weston_layer *layer, struct wl_list *below);
 
 void
 weston_output_finish_frame(tOutput *output, int msecs);
@@ -739,7 +739,7 @@ shell_get_shell_surface(struct wl_client *client,
 tWin*
 Shell_get_surface(struct wl_client *client, tSurf *surface);
 
-static tOutput*	CurrentOutput	();
+tOutput*	CurrentOutput	();
 
 void	ShSurf_LSet		(tWin* shsurf, uint8_t l);
 
