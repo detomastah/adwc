@@ -187,27 +187,15 @@ x11_backend_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(LDFLAGS) -o $@
 @ENABLE_X11_COMPOSITOR_TRUE@am_x11_backend_la_rpath = -rpath \
 @ENABLE_X11_COMPOSITOR_TRUE@	$(moduledir)
-@ENABLE_XSERVER_LAUNCHER_TRUE@xserver_launcher_la_DEPENDENCIES =  \
-@ENABLE_XSERVER_LAUNCHER_TRUE@	$(am__DEPENDENCIES_1)
-am__xserver_launcher_la_SOURCES_DIST = xserver-launcher.c \
-	xserver-protocol.c xserver-server-protocol.h hash.c hash.h
-@ENABLE_XSERVER_LAUNCHER_TRUE@am_xserver_launcher_la_OBJECTS = xserver_launcher_la-xserver-launcher.lo \
-@ENABLE_XSERVER_LAUNCHER_TRUE@	xserver_launcher_la-xserver-protocol.lo \
-@ENABLE_XSERVER_LAUNCHER_TRUE@	xserver_launcher_la-hash.lo
-xserver_launcher_la_OBJECTS = $(am_xserver_launcher_la_OBJECTS)
-xserver_launcher_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
-	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
-	$(xserver_launcher_la_CFLAGS) $(CFLAGS) \
-	$(xserver_launcher_la_LDFLAGS) $(LDFLAGS) -o $@
-@ENABLE_XSERVER_LAUNCHER_TRUE@am_xserver_launcher_la_rpath = -rpath \
-@ENABLE_XSERVER_LAUNCHER_TRUE@	$(moduledir)
 @BUILD_WESTON_LAUNCH_TRUE@am__EXEEXT_1 = weston-launch$(EXEEXT)
 PROGRAMS = $(bin_PROGRAMS)
 am_weston_OBJECTS = weston-adwc.$(OBJEXT) \
+	weston-xserver-launcher.$(OBJEXT) \
+	weston-xserver-protocol.$(OBJEXT) \
 	weston-screenshooter.$(OBJEXT) \
 	weston-screenshooter-protocol.$(OBJEXT) \
 	weston-desktop-shell-protocol.$(OBJEXT) weston-util.$(OBJEXT) \
-	weston-matrix.$(OBJEXT)
+	weston-matrix.$(OBJEXT) weston-hash.$(OBJEXT)
 weston_OBJECTS = $(am_weston_OBJECTS)
 weston_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	../shared/libconfig-parser.la
@@ -252,15 +240,13 @@ am__v_GEN_0 = @echo "  GEN   " $@;
 SOURCES = $(desktop_shell_la_SOURCES) $(drm_backend_la_SOURCES) \
 	$(openwfd_backend_la_SOURCES) $(tablet_shell_la_SOURCES) \
 	$(wayland_backend_la_SOURCES) $(x11_backend_la_SOURCES) \
-	$(xserver_launcher_la_SOURCES) $(weston_SOURCES) \
-	$(weston_launch_SOURCES)
+	$(weston_SOURCES) $(weston_launch_SOURCES)
 DIST_SOURCES = $(am__desktop_shell_la_SOURCES_DIST) \
 	$(am__drm_backend_la_SOURCES_DIST) \
 	$(am__openwfd_backend_la_SOURCES_DIST) \
 	$(am__tablet_shell_la_SOURCES_DIST) \
 	$(am__wayland_backend_la_SOURCES_DIST) \
-	$(am__x11_backend_la_SOURCES_DIST) \
-	$(am__xserver_launcher_la_SOURCES_DIST) $(weston_SOURCES) \
+	$(am__x11_backend_la_SOURCES_DIST) $(weston_SOURCES) \
 	$(am__weston_launch_SOURCES_DIST)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
@@ -437,11 +423,14 @@ AM_CPPFLAGS = \
 weston_LDFLAGS = -export-dynamic
 weston_CFLAGS = $(GCC_CFLAGS)
 weston_LDADD = \
-	$(COMPOSITOR_LIBS) $(DLOPEN_LIBS) -lm ../shared/libconfig-parser.la
+	$(COMPOSITOR_LIBS) $(DLOPEN_LIBS) -lm ../shared/libconfig-parser.la 
 
 weston_SOURCES = \
 	adwc.c				\
 	adwc.h				\
+	xserver-launcher.c			\
+	xserver-protocol.c			\
+	xserver-server-protocol.h		\
 	screenshooter.c				\
 	screenshooter-protocol.c		\
 	screenshooter-server-protocol.h		\
@@ -449,7 +438,9 @@ weston_SOURCES = \
 	util.c					\
 	matrix.c				\
 	matrix.h				\
-	weston-launch.h
+	weston-launch.h			\
+	hash.c					\
+	hash.h
 
 @BUILD_WESTON_LAUNCH_TRUE@weston_launch = weston-launch
 @BUILD_WESTON_LAUNCH_TRUE@weston_launch_SOURCES = weston-launch.c weston-launch.h
@@ -503,17 +494,15 @@ module_LTLIBRARIES = \
 @ENABLE_OPENWFD_COMPOSITOR_TRUE@openwfd_backend_la_LIBADD = $(COMPOSITOR_LIBS) $(OPENWFD_COMPOSITOR_LIBS)
 @ENABLE_OPENWFD_COMPOSITOR_TRUE@openwfd_backend_la_CFLAGS = $(OPENWFD_COMPOSITOR_CFLAGS) $(GCC_CFLAGS)
 @ENABLE_OPENWFD_COMPOSITOR_TRUE@openwfd_backend_la_SOURCES = compositor-openwfd.c tty.c evdev.c evdev.h
-@ENABLE_XSERVER_LAUNCHER_TRUE@xserver_launcher = xserver-launcher.la
-@ENABLE_XSERVER_LAUNCHER_TRUE@xserver_launcher_la_LDFLAGS = -module -avoid-version
-@ENABLE_XSERVER_LAUNCHER_TRUE@xserver_launcher_la_LIBADD = $(XSERVER_LAUNCHER_LIBS)
-@ENABLE_XSERVER_LAUNCHER_TRUE@xserver_launcher_la_CFLAGS = $(GCC_CFLAGS)
-@ENABLE_XSERVER_LAUNCHER_TRUE@xserver_launcher_la_SOURCES = \
-@ENABLE_XSERVER_LAUNCHER_TRUE@	xserver-launcher.c			\
-@ENABLE_XSERVER_LAUNCHER_TRUE@	xserver-protocol.c			\
-@ENABLE_XSERVER_LAUNCHER_TRUE@	xserver-server-protocol.h		\
-@ENABLE_XSERVER_LAUNCHER_TRUE@	hash.c					\
-@ENABLE_XSERVER_LAUNCHER_TRUE@	hash.h
 
+#xserver_launcher = xserver-launcher.la
+#xserver_launcher_la_LDFLAGS = -module -avoid-version
+#xserver_launcher_la_LIBADD = $(XSERVER_LAUNCHER_LIBS)
+#xserver_launcher_la_CFLAGS = $(GCC_CFLAGS)
+#xserver_launcher_la_SOURCES =			\
+#	xserver-server-protocol.h		\
+#	hash.c					\
+#	hash.h
 @ENABLE_DESKTOP_SHELL_TRUE@desktop_shell = desktop-shell.la
 @ENABLE_DESKTOP_SHELL_TRUE@desktop_shell_la_LDFLAGS = -module -avoid-version
 @ENABLE_DESKTOP_SHELL_TRUE@desktop_shell_la_LIBADD = $(COMPOSITOR_LIBS)	\
@@ -624,8 +613,6 @@ wayland-backend.la: $(wayland_backend_la_OBJECTS) $(wayland_backend_la_DEPENDENC
 	$(AM_V_CCLD)$(wayland_backend_la_LINK) $(am_wayland_backend_la_rpath) $(wayland_backend_la_OBJECTS) $(wayland_backend_la_LIBADD) $(LIBS)
 x11-backend.la: $(x11_backend_la_OBJECTS) $(x11_backend_la_DEPENDENCIES) $(EXTRA_x11_backend_la_DEPENDENCIES) 
 	$(AM_V_CCLD)$(x11_backend_la_LINK) $(am_x11_backend_la_rpath) $(x11_backend_la_OBJECTS) $(x11_backend_la_LIBADD) $(LIBS)
-xserver-launcher.la: $(xserver_launcher_la_OBJECTS) $(xserver_launcher_la_DEPENDENCIES) $(EXTRA_xserver_launcher_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(xserver_launcher_la_LINK) $(am_xserver_launcher_la_rpath) $(xserver_launcher_la_OBJECTS) $(xserver_launcher_la_LIBADD) $(LIBS)
 install-binPROGRAMS: $(bin_PROGRAMS)
 	@$(NORMAL_INSTALL)
 	@list='$(bin_PROGRAMS)'; test -n "$(bindir)" || list=; \
@@ -700,15 +687,15 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/wayland_backend_la-compositor-wayland.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/weston-adwc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/weston-desktop-shell-protocol.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/weston-hash.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/weston-matrix.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/weston-screenshooter-protocol.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/weston-screenshooter.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/weston-util.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/weston-xserver-launcher.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/weston-xserver-protocol.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/weston_launch-weston-launch.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/x11_backend_la-compositor-x11.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xserver_launcher_la-hash.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xserver_launcher_la-xserver-launcher.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xserver_launcher_la-xserver-protocol.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -829,27 +816,6 @@ x11_backend_la-compositor-x11.lo: compositor-x11.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(x11_backend_la_CFLAGS) $(CFLAGS) -c -o x11_backend_la-compositor-x11.lo `test -f 'compositor-x11.c' || echo '$(srcdir)/'`compositor-x11.c
 
-xserver_launcher_la-xserver-launcher.lo: xserver-launcher.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(xserver_launcher_la_CFLAGS) $(CFLAGS) -MT xserver_launcher_la-xserver-launcher.lo -MD -MP -MF $(DEPDIR)/xserver_launcher_la-xserver-launcher.Tpo -c -o xserver_launcher_la-xserver-launcher.lo `test -f 'xserver-launcher.c' || echo '$(srcdir)/'`xserver-launcher.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xserver_launcher_la-xserver-launcher.Tpo $(DEPDIR)/xserver_launcher_la-xserver-launcher.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='xserver-launcher.c' object='xserver_launcher_la-xserver-launcher.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(xserver_launcher_la_CFLAGS) $(CFLAGS) -c -o xserver_launcher_la-xserver-launcher.lo `test -f 'xserver-launcher.c' || echo '$(srcdir)/'`xserver-launcher.c
-
-xserver_launcher_la-xserver-protocol.lo: xserver-protocol.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(xserver_launcher_la_CFLAGS) $(CFLAGS) -MT xserver_launcher_la-xserver-protocol.lo -MD -MP -MF $(DEPDIR)/xserver_launcher_la-xserver-protocol.Tpo -c -o xserver_launcher_la-xserver-protocol.lo `test -f 'xserver-protocol.c' || echo '$(srcdir)/'`xserver-protocol.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xserver_launcher_la-xserver-protocol.Tpo $(DEPDIR)/xserver_launcher_la-xserver-protocol.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='xserver-protocol.c' object='xserver_launcher_la-xserver-protocol.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(xserver_launcher_la_CFLAGS) $(CFLAGS) -c -o xserver_launcher_la-xserver-protocol.lo `test -f 'xserver-protocol.c' || echo '$(srcdir)/'`xserver-protocol.c
-
-xserver_launcher_la-hash.lo: hash.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(xserver_launcher_la_CFLAGS) $(CFLAGS) -MT xserver_launcher_la-hash.lo -MD -MP -MF $(DEPDIR)/xserver_launcher_la-hash.Tpo -c -o xserver_launcher_la-hash.lo `test -f 'hash.c' || echo '$(srcdir)/'`hash.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/xserver_launcher_la-hash.Tpo $(DEPDIR)/xserver_launcher_la-hash.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='hash.c' object='xserver_launcher_la-hash.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(xserver_launcher_la_CFLAGS) $(CFLAGS) -c -o xserver_launcher_la-hash.lo `test -f 'hash.c' || echo '$(srcdir)/'`hash.c
-
 weston-adwc.o: adwc.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -MT weston-adwc.o -MD -MP -MF $(DEPDIR)/weston-adwc.Tpo -c -o weston-adwc.o `test -f 'adwc.c' || echo '$(srcdir)/'`adwc.c
 @am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/weston-adwc.Tpo $(DEPDIR)/weston-adwc.Po
@@ -863,6 +829,34 @@ weston-adwc.obj: adwc.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='adwc.c' object='weston-adwc.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -c -o weston-adwc.obj `if test -f 'adwc.c'; then $(CYGPATH_W) 'adwc.c'; else $(CYGPATH_W) '$(srcdir)/adwc.c'; fi`
+
+weston-xserver-launcher.o: xserver-launcher.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -MT weston-xserver-launcher.o -MD -MP -MF $(DEPDIR)/weston-xserver-launcher.Tpo -c -o weston-xserver-launcher.o `test -f 'xserver-launcher.c' || echo '$(srcdir)/'`xserver-launcher.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/weston-xserver-launcher.Tpo $(DEPDIR)/weston-xserver-launcher.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='xserver-launcher.c' object='weston-xserver-launcher.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -c -o weston-xserver-launcher.o `test -f 'xserver-launcher.c' || echo '$(srcdir)/'`xserver-launcher.c
+
+weston-xserver-launcher.obj: xserver-launcher.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -MT weston-xserver-launcher.obj -MD -MP -MF $(DEPDIR)/weston-xserver-launcher.Tpo -c -o weston-xserver-launcher.obj `if test -f 'xserver-launcher.c'; then $(CYGPATH_W) 'xserver-launcher.c'; else $(CYGPATH_W) '$(srcdir)/xserver-launcher.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/weston-xserver-launcher.Tpo $(DEPDIR)/weston-xserver-launcher.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='xserver-launcher.c' object='weston-xserver-launcher.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -c -o weston-xserver-launcher.obj `if test -f 'xserver-launcher.c'; then $(CYGPATH_W) 'xserver-launcher.c'; else $(CYGPATH_W) '$(srcdir)/xserver-launcher.c'; fi`
+
+weston-xserver-protocol.o: xserver-protocol.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -MT weston-xserver-protocol.o -MD -MP -MF $(DEPDIR)/weston-xserver-protocol.Tpo -c -o weston-xserver-protocol.o `test -f 'xserver-protocol.c' || echo '$(srcdir)/'`xserver-protocol.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/weston-xserver-protocol.Tpo $(DEPDIR)/weston-xserver-protocol.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='xserver-protocol.c' object='weston-xserver-protocol.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -c -o weston-xserver-protocol.o `test -f 'xserver-protocol.c' || echo '$(srcdir)/'`xserver-protocol.c
+
+weston-xserver-protocol.obj: xserver-protocol.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -MT weston-xserver-protocol.obj -MD -MP -MF $(DEPDIR)/weston-xserver-protocol.Tpo -c -o weston-xserver-protocol.obj `if test -f 'xserver-protocol.c'; then $(CYGPATH_W) 'xserver-protocol.c'; else $(CYGPATH_W) '$(srcdir)/xserver-protocol.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/weston-xserver-protocol.Tpo $(DEPDIR)/weston-xserver-protocol.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='xserver-protocol.c' object='weston-xserver-protocol.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -c -o weston-xserver-protocol.obj `if test -f 'xserver-protocol.c'; then $(CYGPATH_W) 'xserver-protocol.c'; else $(CYGPATH_W) '$(srcdir)/xserver-protocol.c'; fi`
 
 weston-screenshooter.o: screenshooter.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -MT weston-screenshooter.o -MD -MP -MF $(DEPDIR)/weston-screenshooter.Tpo -c -o weston-screenshooter.o `test -f 'screenshooter.c' || echo '$(srcdir)/'`screenshooter.c
@@ -933,6 +927,20 @@ weston-matrix.obj: matrix.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='matrix.c' object='weston-matrix.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -c -o weston-matrix.obj `if test -f 'matrix.c'; then $(CYGPATH_W) 'matrix.c'; else $(CYGPATH_W) '$(srcdir)/matrix.c'; fi`
+
+weston-hash.o: hash.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -MT weston-hash.o -MD -MP -MF $(DEPDIR)/weston-hash.Tpo -c -o weston-hash.o `test -f 'hash.c' || echo '$(srcdir)/'`hash.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/weston-hash.Tpo $(DEPDIR)/weston-hash.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='hash.c' object='weston-hash.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -c -o weston-hash.o `test -f 'hash.c' || echo '$(srcdir)/'`hash.c
+
+weston-hash.obj: hash.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -MT weston-hash.obj -MD -MP -MF $(DEPDIR)/weston-hash.Tpo -c -o weston-hash.obj `if test -f 'hash.c'; then $(CYGPATH_W) 'hash.c'; else $(CYGPATH_W) '$(srcdir)/hash.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/weston-hash.Tpo $(DEPDIR)/weston-hash.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='hash.c' object='weston-hash.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(weston_CFLAGS) $(CFLAGS) -c -o weston-hash.obj `if test -f 'hash.c'; then $(CYGPATH_W) 'hash.c'; else $(CYGPATH_W) '$(srcdir)/hash.c'; fi`
 
 weston_launch-weston-launch.o: weston-launch.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(weston_launch_CPPFLAGS) $(CPPFLAGS) $(weston_launch_CFLAGS) $(CFLAGS) -MT weston_launch-weston-launch.o -MD -MP -MF $(DEPDIR)/weston_launch-weston-launch.Tpo -c -o weston_launch-weston-launch.o `test -f 'weston-launch.c' || echo '$(srcdir)/'`weston-launch.c

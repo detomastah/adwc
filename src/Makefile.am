@@ -11,11 +11,14 @@ AM_CPPFLAGS =					\
 weston_LDFLAGS = -export-dynamic
 weston_CFLAGS = $(GCC_CFLAGS)
 weston_LDADD =								\
-	$(COMPOSITOR_LIBS) $(DLOPEN_LIBS) -lm ../shared/libconfig-parser.la
+	$(COMPOSITOR_LIBS) $(DLOPEN_LIBS) -lm ../shared/libconfig-parser.la 
 
 weston_SOURCES =			\
 	adwc.c				\
 	adwc.h				\
+	xserver-launcher.c			\
+	xserver-protocol.c			\
+	xserver-server-protocol.h		\
 	screenshooter.c				\
 	screenshooter-protocol.c		\
 	screenshooter-server-protocol.h		\
@@ -23,7 +26,9 @@ weston_SOURCES =			\
 	util.c					\
 	matrix.c				\
 	matrix.h				\
-	weston-launch.h
+	weston-launch.h			\
+	hash.c					\
+	hash.h
 
 if BUILD_WESTON_LAUNCH
 weston_launch = weston-launch
@@ -103,16 +108,14 @@ openwfd_backend_la_SOURCES = compositor-openwfd.c tty.c evdev.c evdev.h
 endif
 
 if ENABLE_XSERVER_LAUNCHER
-xserver_launcher = xserver-launcher.la
-xserver_launcher_la_LDFLAGS = -module -avoid-version
-xserver_launcher_la_LIBADD = $(XSERVER_LAUNCHER_LIBS)
-xserver_launcher_la_CFLAGS = $(GCC_CFLAGS)
-xserver_launcher_la_SOURCES =			\
-	xserver-launcher.c			\
-	xserver-protocol.c			\
-	xserver-server-protocol.h		\
-	hash.c					\
-	hash.h
+#xserver_launcher = xserver-launcher.la
+#xserver_launcher_la_LDFLAGS = -module -avoid-version
+#xserver_launcher_la_LIBADD = $(XSERVER_LAUNCHER_LIBS)
+#xserver_launcher_la_CFLAGS = $(GCC_CFLAGS)
+#xserver_launcher_la_SOURCES =			\
+#	xserver-server-protocol.h		\
+#	hash.c					\
+#	hash.h
 endif
 
 if ENABLE_DESKTOP_SHELL

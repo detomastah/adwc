@@ -142,8 +142,8 @@ struct weston_output {
 	
 	
 	tTags Tags;
-
-        struct wl_list surfaces;
+	
+	struct wl_list surfaces;
 };
 
 struct weston_input_device {
@@ -316,6 +316,7 @@ struct weston_region {
 struct weston_surface {
 	struct wl_surface surface;
 	struct weston_compositor *compositor;
+	struct wl_client* client;
 	GLuint texture;
 	pixman_region32_t clip;
 	pixman_region32_t damage;
@@ -545,6 +546,32 @@ typedef struct {
 	uintptr_t Priv;
 }tADWC_Binding;
 
+
+
+struct xserver {
+	struct wl_resource resource;
+};
+
+struct weston_xserver {
+	struct wl_display *wl_display;
+	struct wl_event_loop *loop;
+	struct wl_event_source *sigchld_source;
+	int abstract_fd;
+	struct wl_event_source *abstract_source;
+	int unix_fd;
+	struct wl_event_source *unix_source;
+	int display;
+	struct weston_process process;
+	struct wl_resource *resource;
+	struct wl_client *client;
+	struct weston_compositor *compositor;
+	struct weston_wm *wm;
+	struct wl_listener activate_listener;
+	struct wl_listener destroy_listener;
+};
+
+
+
 void
 weston_surface_update_transform(struct weston_surface *surface);
 
@@ -730,7 +757,9 @@ weston_client_launch(struct weston_compositor *compositor,
 void
 weston_watch_process(struct weston_process *process);
 
-int
+
+bool		weston_wm_window_resize			(struct weston_wm* wm, struct weston_surface* es, int32_t x, int32_t y, int32_t width, int32_t height, bool hints);
+void*
 weston_xserver_init(struct weston_compositor *compositor);
 /*
 struct weston_zoom;
@@ -753,6 +782,9 @@ backend_init(struct wl_display *display, int argc, char *argv[]);
 
 
 
+void
+shell_surface_set_toplevel(struct wl_client *client,
+			   struct wl_resource *resource);
 
 static void
 shell_surface_configure(struct weston_surface *, int32_t, int32_t);
@@ -762,6 +794,8 @@ shell_get_shell_surface(struct wl_client *client,
 			uint32_t id,
 			struct wl_resource *surface_resource);
 
+struct shell_surface*
+Shell_get_surface(struct wl_client *client, struct weston_surface *surface);
 
 static struct weston_output*	CurrentOutput	();
 

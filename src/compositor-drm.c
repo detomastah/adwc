@@ -214,7 +214,13 @@ drm_output_render(struct drm_output *output, pixman_region32_t *damage)
 
 	wl_list_for_each_reverse(surface, &compositor->base.surface_list, link)
 		weston_surface_draw(surface, &output->base, damage);
-
+	
+	if (0) {
+		struct weston_input_device* wid;
+		wl_list_for_each_reverse(wid, &compositor->base.input_device_list, link)
+			weston_surface_draw(wid->sprite, &output->base, damage);
+	}
+	
 	eglSwapBuffers(compositor->base.display, output->egl_surface);
 	output->next_bo = gbm_surface_lock_front_buffer(output->surface);
 	if (!output->next_bo) {
@@ -314,6 +320,7 @@ drm_output_repaint(struct weston_output *output_base,
 				ret, strerror(errno));
 		}
 	}
+	
 
 	return;
 }
@@ -575,6 +582,7 @@ weston_output_set_cursor(struct weston_output *output,
 			 struct weston_input_device *device,
 			 pixman_region32_t *overlap)
 {
+//	printf ("HAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n");
 	pixman_region32_t cursor_region;
 	int prior_was_hardware;
 
@@ -582,29 +590,43 @@ weston_output_set_cursor(struct weston_output *output,
 		return;
 
 	pixman_region32_init(&cursor_region);
-//	pixman_region32_intersect(&cursor_region,
-//				  &device->sprite->transform.boundingbox,
-//				  &output->region);
+	
+	pixman_region32_t boundingbox;
+	pixman_region32_init_rect(&boundingbox,
+						device->sprite->geometry.x,
+						device->sprite->geometry.y,
+						device->sprite->geometry.width,
+						device->sprite->geometry.height);
+	
+	pixman_region32_intersect(&cursor_region,
+				  &boundingbox,
+				  &output->region);
 
 	if (!pixman_region32_not_empty(&cursor_region)) {
 		drm_output_set_cursor(output, NULL);
+	//	printf ("HAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 0\n");
 		goto out;
 	}
 
 	prior_was_hardware = device->hw_cursor;
-	if (pixman_region32_not_empty(overlap) ||
-	    drm_output_set_cursor(output, device) < 0) {
+	if (/*pixman_region32_not_empty(overlap) ||*/ drm_output_set_cursor(output, device) < 0) {
 		if (prior_was_hardware) {
 			weston_surface_damage(device->sprite);
+		//	printf ("HAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 1\n");
 			drm_output_set_cursor(output, NULL);
 		}
+	//	printf ("HAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 2\n");
 		device->hw_cursor = 0;
 	} else {
-		if (!prior_was_hardware)
+	//	printf ("HAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 3\n");
+		if (!prior_was_hardware) {
+		//	printf ("HAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4\n");
 			weston_surface_damage_below(device->sprite);
+		}
 		pixman_region32_fini(&device->sprite->damage);
 		pixman_region32_init(&device->sprite->damage);
 		device->hw_cursor = 1;
+	//	printf ("HAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA5\n");
 	}
 
 out:
@@ -639,36 +661,63 @@ drm_assign_planes(struct weston_output *output)
 		 * special overlays
 		 */
 		pixman_region32_init(&surface_overlap);
-//		pixman_region32_intersect(&surface_overlap, &overlap,
-//					  &es->transform.boundingbox);
-
+		pixman_region32_t boundingbox;
+		pixman_region32_init_rect(&boundingbox,
+							es->geometry.x,
+							es->geometry.y,
+							es->geometry.width,
+							es->geometry.height);
+		pixman_region32_intersect(&surface_overlap, &overlap, &boundingbox);
+		
 		device = (struct weston_input_device *) ec->input_device;
 		if (es == device->sprite) {
-			weston_output_set_cursor(output, device,
-						 &surface_overlap);
-
-		//	if (!device->hw_cursor)
-		//		pixman_region32_union(&overlap, &overlap,
-		//				      &es->transform.boundingbox);
-		} else if (!drm_output_prepare_overlay_surface(output, es,
-							       &surface_overlap)) {
+			weston_output_set_cursor(output, device, &surface_overlap);
+			
+			pixman_region32_t boundingbox;
+			pixman_region32_init_rect(&boundingbox,
+								es->geometry.x,
+								es->geometry.y,
+								es->geometry.width,
+								es->geometry.height);
+			if (!device->hw_cursor)
+				pixman_region32_union(&overlap, &overlap, &boundingbox);
+		} else if (!drm_output_prepare_overlay_surface(output, es, &surface_overlap)) {
 			pixman_region32_fini(&es->damage);
 			pixman_region32_init(&es->damage);
 		} else {
-		//	pixman_region32_union(&overlap, &overlap,
-		//			      &es->transform.boundingbox);
+			pixman_region32_t boundingbox;
+			pixman_region32_init_rect(&boundingbox,
+								es->geometry.x,
+								es->geometry.y,
+								es->geometry.width,
+								es->geometry.height);
+			pixman_region32_union(&overlap, &overlap, &boundingbox);
 		}
 		pixman_region32_fini(&surface_overlap);
 	}
+	device = (struct weston_input_device *) ec->input_device;
+	if (device->sprite) {
+		weston_output_set_cursor(output, device, &surface_overlap);
+		
+		pixman_region32_t boundingbox;
+		pixman_region32_init_rect(&boundingbox,
+							es->geometry.x,
+							es->geometry.y,
+							es->geometry.width,
+							es->geometry.height);
+		if (!device->hw_cursor)
+			pixman_region32_union(&overlap, &overlap, &boundingbox);
+	}
+	
 	pixman_region32_fini(&overlap);
 
 	drm_disable_unused_sprites(output);
 }
 
 static int
-drm_output_set_cursor(struct weston_output *output_base,
-		      struct weston_input_device *eid)
+drm_output_set_cursor(struct weston_output *output_base, struct weston_input_device *eid)
 {
+//	printf ("YUUUUUUPI\n");
 	struct drm_output *output = (struct drm_output *) output_base;
 	struct drm_compositor *c =
 		(struct drm_compositor *) output->base.compositor;
@@ -678,34 +727,43 @@ drm_output_set_cursor(struct weston_output *output_base,
 
 	if (eid == NULL) {
 		drmModeSetCursor(c->drm.fd, output->crtc_id, 0, 0, 0);
+	//	printf ("YUUUUUUPI ret %d\n", 0);
 		return 0;
 	}
 
-	if (eid->sprite->image == EGL_NO_IMAGE_KHR)
-		goto out;
-
-	if (eid->sprite->geometry.width > 64 ||
-	    eid->sprite->geometry.height > 64)
-		goto out;
-
-	bo = gbm_bo_create_from_egl_image(c->gbm,
-					  c->base.display,
-					  eid->sprite->image, 64, 64,
-					  GBM_BO_USE_CURSOR_64X64);
+	if (eid->sprite->image == EGL_NO_IMAGE_KHR) {
+		eid->sprite->image = gbm_bo_create(c->gbm, 64, 64, GBM_FORMAT_ARGB8888, GBM_BO_USE_CURSOR_64X64);
+	//	bo = gbm_bo_create(c->gbm, 64, 64, GBM_FORMAT_BGRA8888, GBM_BO_USE_CURSOR_64X64);
+	//	printf ("YUUUUUUPI ret eid->sprite->image == EGL_NO_IMAGE_KHR\n");
+	//	goto out;
+	}else {
+		bo = eid->sprite->image;/*
+		if (eid->sprite->geometry.width > 64 ||
+		    eid->sprite->geometry.height > 64) {
+			printf ("YUUUUUUPI ret eid->sprite->geometry.width > 64 || eid->sprite->geometry.height > 64R\n");
+			goto out;
+		}
+		bo = gbm_bo_create_from_egl_image(c->gbm,
+								c->base.display,
+								eid->sprite->image, 64, 64,
+								GBM_BO_USE_CURSOR_64X64);*/
+	}
 	/* Not suitable for hw cursor, fall back */
-	if (bo == NULL)
+	if (bo == NULL) {
+	//	printf ("YUUUUUUPI ret bo == NULL\n");
 		goto out;
-
+	}
 	handle = gbm_bo_get_handle(bo).s32;
 	stride = gbm_bo_get_pitch(bo);
-	gbm_bo_destroy(bo);
 
 	/* gbm_bo_create_from_egl_image() didn't always validate the usage
 	 * flags, and in that case we might end up with a bad stride. */
-	if (stride != 64 * 4)
+	if (stride != 64 * 4) {
+	//	printf ("YUUUUUUPI ret stride != 64 * 4\n");
 		goto out;
-
+	}
 	ret = drmModeSetCursor(c->drm.fd, output->crtc_id, handle, 64, 64);
+//	gbm_bo_destroy(bo);
 	if (ret) {
 		fprintf(stderr, "failed to set cursor: %s\n", strerror(-ret));
 		goto out;
@@ -722,6 +780,8 @@ drm_output_set_cursor(struct weston_output *output_base,
 out:
 	if (ret)
 		drmModeSetCursor(c->drm.fd, output->crtc_id, 0, 0, 0);
+	
+//	printf ("YUUUUUUPI ret %d\n", ret);
 	return ret;
 }
 

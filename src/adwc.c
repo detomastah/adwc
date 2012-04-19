@@ -60,6 +60,8 @@
 static struct wl_list child_process_list;
 static jmp_buf segv_jmp_buf;
 
+struct weston_xserver *gpXServer;
+
 typedef struct {
 	unsigned long sec, nsec;
 } tSC_time;
@@ -1441,7 +1443,7 @@ compositor_create_surface(struct wl_client *client,
 		wl_resource_post_no_memory(resource);
 		return;
 	}
-
+	surface->client = client;
 	surface->surface.resource.destroy = destroy_surface;
 
 	surface->surface.resource.object.id = id;
@@ -2115,7 +2117,7 @@ weston_input_device_init(struct weston_input_device *device,
 
 	device->sprite = weston_surface_create(ec);
 	device->sprite->surface.resource.data = device->sprite;
-
+	
 	device->compositor = ec;
 	device->hotspot_x = 16;
 	device->hotspot_y = 16;
@@ -2771,12 +2773,13 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 
 	xserver_init = NULL;
-	if (xserver)
-		xserver_init = load_module("xserver-launcher.so",
-					   "weston_xserver_init",
-					   &xserver_module);
+//	if (xserver)
+//		xserver_init = load_module("xserver-launcher.so",
+//					   "weston_xserver_init",
+//					   &xserver_module);
+	xserver_init = weston_xserver_init;
 	if (xserver_init)
-		xserver_init(ec);
+		gpXServer = xserver_init(ec);
 
 	if (wl_display_add_socket(display, socket_name)) {
 		fprintf(stderr, "failed to add socket: %m\n");
@@ -3015,9 +3018,16 @@ resize_grab_motion(struct wl_pointer_grab *grab,
 	} else {
 		height = resize->height;
 	}
-
-	wl_shell_surface_send_configure(&resize->base.shsurf->resource,
-					resize->edges, width, height);
+	if (resize->base.shsurf->surface->client == gpXServer->client) {
+	//	printf ("HAUHTEONSUHETONSUHTENSOUHTEOTNSUHEOTNSUHTEOSUHTNSEOU\n");
+		weston_wm_window_resize (gpXServer->wm, resize->base.shsurf->surface,
+			resize->base.shsurf->surface->geometry.x,
+			resize->base.shsurf->surface->geometry.y,
+			width, height, 0);
+	}else {
+		wl_shell_surface_send_configure(&resize->base.shsurf->resource,
+						resize->edges, width, height);
+	}
 }
 
 static void
@@ -3240,7 +3250,7 @@ get_default_output(struct weston_compositor *compositor)
 			    struct weston_output, link);
 }
 
-static void
+void
 shell_unset_fullscreen(struct shell_surface *shsurf)
 {
 	/* undo all fullscreen things here */
@@ -3256,7 +3266,7 @@ shell_unset_fullscreen(struct shell_surface *shsurf)
 				    shsurf->saved_x, shsurf->saved_y);
 }
 
-static int
+int
 reset_shell_surface_type(struct shell_surface *surface)
 {
 	switch (surface->type) {
@@ -3291,7 +3301,7 @@ reset_shell_surface_type(struct shell_surface *surface)
 	return 0;
 }
 
-static void
+void
 shell_surface_set_toplevel(struct wl_client *client,
 			   struct wl_resource *resource)
 
@@ -3304,7 +3314,7 @@ shell_surface_set_toplevel(struct wl_client *client,
 	surface->type = SHELL_SURFACE_TOPLEVEL;
 }
 
-static void
+void
 shell_surface_set_transient(struct wl_client *client,
 			    struct wl_resource *resource,
 			    struct wl_resource *parent_resource,
@@ -3326,7 +3336,7 @@ shell_surface_set_transient(struct wl_client *client,
 	shsurf->type = SHELL_SURFACE_TRANSIENT;
 }
 
-static struct wl_shell *
+struct wl_shell *
 shell_surface_get_shell(struct shell_surface *shsurf)
 {
 	return shsurf->shell;
@@ -4338,7 +4348,9 @@ static void		map			(struct wl_shell *shell, struct weston_surface *surface, int3
 	/* initial positioning, see also configure() */
 	switch (surface_type) {
 	case SHELL_SURFACE_TOPLEVEL:
-		shsurf->Tags = CurrentOutput()->Tags;
+		if (shsurf) {
+			shsurf->Tags = CurrentOutput()->Tags;
+		}
 	//	weston_surface_set_position(surface, 10 + random() % 400,
 	//				    10 + random() % 400);
 		break;
@@ -4587,6 +4599,77 @@ shell_get_shell_surface(struct wl_client *client,
 
 	wl_client_add_resource(client, &shsurf->resource);
 	dTrace_L("");
+}
+
+struct shell_surface*
+Shell_get_surface(struct wl_client *client, struct weston_surface *surface)
+{
+	dTrace_E("");
+	struct shell_surface *shsurf;
+
+	if (get_shell_surface(surface)) {
+	//	wl_resource_post_error(surface_resource,
+	//		WL_DISPLAY_ERROR_INVALID_OBJECT,
+	//		"wl_shell::get_shell_surface already requested");
+		return;
+	}
+
+	if (surface->configure) {
+	//	wl_resource_post_error(surface_resource,
+	//			       WL_DISPLAY_ERROR_INVALID_OBJECT,
+	//			       "surface->configure already set");
+		return;
+	}
+
+	shsurf = calloc(1, sizeof *shsurf);
+	if (!shsurf) {
+	//	wl_resource_post_no_memory(resource);
+		return;
+	}
+
+	surface->configure = shell_surface_configure;
+
+	shsurf->resource.destroy = destroy_shell_surface;
+	shsurf->resource.object.id = 0;
+	shsurf->resource.object.interface = &wl_shell_surface_interface;
+	shsurf->resource.object.implementation =
+		(void (**)(void)) &shell_surface_implementation;
+	shsurf->resource.data = shsurf;
+	
+	shsurf->shell = &gShell;
+	shsurf->saved_position_valid = false;
+	shsurf->surface = surface;
+	shsurf->fullscreen.type = WL_SHELL_SURFACE_FULLSCREEN_METHOD_DEFAULT;
+	shsurf->fullscreen.framerate = 0;
+	shsurf->fullscreen.black_surface = NULL;
+	wl_list_init(&shsurf->fullscreen.transform.link);
+
+	shsurf->surface_destroy_listener.notify = shell_handle_surface_destroy;
+	wl_signal_add(&surface->surface.resource.destroy_signal,
+		      &shsurf->surface_destroy_listener);
+
+	/* init link so its safe to always remove it in destroy_shell_surface */
+	wl_list_init(&shsurf->link);
+
+	/* empty when not in use */
+//	wl_list_init(&shsurf->rotation.transform.link);
+//	weston_matrix_init(&shsurf->rotation.rotation);
+
+	shsurf->type = SHELL_SURFACE_NONE;
+	
+	shsurf->L = L_eNorm;
+	wl_list_insert(&gShell.L[shsurf->L], &shsurf->L_link);
+	
+	
+	
+	
+	shsurf->Tags = 0;
+	wl_list_init(&shsurf->O_link);
+	puts("WLIST INIT");
+
+	wl_client_add_resource(client, &shsurf->resource);
+	dTrace_L("");
+	return shsurf;
 }
 
 
@@ -5011,7 +5094,13 @@ static struct weston_output*	CurrentOutput	()
 		}
 		break;
 	}*/
-        return ((struct weston_input_device*) gShell.compositor->input_device)->sprite->output;
+	if (gShell.compositor->input_device
+		&& ((struct weston_input_device*) gShell.compositor->input_device)->sprite
+		&& ((struct weston_input_device*) gShell.compositor->input_device)->sprite->output
+	)
+		return ((struct weston_input_device*) gShell.compositor->input_device)->sprite->output;
+	
+	return container_of(&gShell.compositor->output_list, struct weston_output, link);
 /*	struct weston_surface *es;
 //	wl_list_for_each(es, &gShell.compositor->cursor_layer.surface_list, layer_link) {
 	wl_list_for_each(es, &gShell.compositor->cursor_layer.surface_list, link) {
@@ -5187,14 +5276,15 @@ static void		Act_Surf_Teleport		(struct wl_input_device *device, uint32_t time, 
 
 /** *********************************** shell main ************************************ **/
 
-void layout(struct weston_output* output) {
+void layout(struct weston_output* output)
+{
 	int n, cols, rows, cn, rn, i, cx, cy, cw, ch, mw, mh, mx, my;
 	struct shell_surface* c;
 	
-	mw = output->mm_width;
-	mh = output->mm_height - 32;
-	mx = output->x;
-	my = output->y + 32;
+	mw = output->region.extents.x2 - output->region.extents.x1;
+	mh = output->region.extents.y2 - output->region.extents.y1 - 32;
+	mx = output->region.extents.x1;
+	my = output->region.extents.y1 + 32;
 	printf("mw:%d mh:%d mx:%d my:%d\n", mw, mh, mx, my);
 	
 	n = wl_list_length(&output->surfaces);
@@ -5227,6 +5317,10 @@ void layout(struct weston_output* output) {
 		int32_t esmt = es->border.top;
 		int32_t esmr = es->border.right;
 		int32_t esmb = es->border.bottom;/**/
+	/*	int32_t esml = 0;
+		int32_t esmt = 0;
+		int32_t esmr = 0;
+		int32_t esmb = 0;/**/
 	/*	int32_t esml = 32;
 		int32_t esmt = 32;
 		int32_t esmr = 32;
@@ -5241,8 +5335,15 @@ void layout(struct weston_output* output) {
 			es->geometry_ours.width = cw + esml + esmr;
 			es->geometry_ours.height = ch + esmt + esmb;
 			
-			weston_surface_configure(es, cx - esml, cy - esmt, cw + esml + esmr, ch + esmt + esmb);
-			wl_shell_surface_send_configure(&c->resource, 0, cw + esml + esmr, ch + esmt + esmb);
+			if (es->client == gpXServer->client) {
+				weston_surface_configure(es, cx - esml, cy - esmt, es->geometry.width, es->geometry.height);
+			//	printf ("HAUHTEONSUHETONSUHTENSOUHTEOTNSUHEOTNSUHTEOSUHTNSEOU\n");
+				weston_wm_window_resize (gpXServer->wm, es, cx - esml, cy - esmt, cw + esml + esmr, ch + esmt + esmb, 0);
+			}else {
+				weston_surface_configure(es, cx - esml, cy - esmt, cw + esml + esmr, ch + esmt + esmb);
+				wl_shell_surface_send_configure(&c->resource, 0, cw + esml + esmr, ch + esmt + esmb);
+			}
+			weston_surface_assign_output (es);
 		}
 		rn++;
 		if(rn >= rows) {
@@ -5265,9 +5366,17 @@ void shell_restack()
 	shell_L_print (&gShell);
 	
 	wl_list_for_each(output, &gShell.compositor->output_list, link) {
-//		printf("output TAG: %lx\n", output->Tags);
+		printf("\noutput TAG: %lx\n", output->Tags);
+		printf("xy %d %d	wh %d %d\n",
+			output->region.extents.x1,
+			output->region.extents.y1,
+			output->region.extents.x2,
+			output->region.extents.y2
+		);
+	//	printf("mw:%d mh:%d mx:%d my:%d\n", output->mm_width, output->mm_height, output->x, output->y);
 		wl_list_init(&output->surfaces);
 	}
+	printf("\n");
 	
 	wl_list_init(&gShell.compositor->surface_list);
 	
@@ -5289,7 +5398,7 @@ void shell_restack()
 					continue;
 				if (shsurf->Tags & output->Tags) {
 				//	printf("surf TAG: %x\n", shsurf->Tags);
-					shsurf->output = output;
+				//	shsurf->output = output;
 					wl_list_insert(&gShell.compositor->surface_list, &shsurf->surface->link);
 					if (i == L_eNorm)
 						wl_list_insert(&output->surfaces, &shsurf->O_link);
