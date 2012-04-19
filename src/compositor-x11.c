@@ -855,7 +855,7 @@ x11_compositor_create(struct wl_display *display,
 	if (!(out = x11_compositor_create_output(c, x, 0, width, height, fullscreen)))
 		return NULL;
 	
-	Output_Rotate (&out->base, Output_Rotation_eLeft);
+//	Output_Rotate (&out->base, Output_Rotation_eLeft);
 	
 	if (x11_input_create(c) < 0)
 		return NULL;

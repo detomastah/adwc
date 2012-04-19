@@ -268,6 +268,13 @@ empty_region(pixman_region32_t *region)
 }
 
 
+WL_EXPORT uint32_t	weston_compositor_get_time			(void)
+{
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	return tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
 
 
 tWin *			get_shell_surface					(tSurf *surface);
@@ -473,26 +480,15 @@ WL_EXPORT int		weston_surface_is_mapped			(tSurf *surface)
 
 
 
-WL_EXPORT uint32_t
-weston_compositor_get_time(void)
-{
-       struct timeval tv;
-
-       gettimeofday(&tv, NULL);
-
-       return tv.tv_sec * 1000 + tv.tv_usec / 1000;
-}
 
 tSurf*	weston_compositor_pick_surface		(tComp *compositor, int32_t x, int32_t y, int32_t *sx, int32_t *sy)
 {
-	tSurf *surface;
 //	dTrace_E("");
-	
+	tSurf *surface;
 	wl_list_for_each(surface, &compositor->surface_list, link) {
 	//	printf ("weston_compositor_pick_surface %d %d\n", surface->geometry.x, surface->geometry.y);
 		weston_surface_from_global(surface, x, y, sx, sy);
-		if (pixman_region32_contains_point(&surface->input,
-						   *sx, *sy, NULL))
+		if (pixman_region32_contains_point(&surface->input, *sx, *sy, NULL))
 			return surface;
 	}
 
@@ -523,14 +519,13 @@ void				weston_device_repick				(struct wl_input_device *device)
 	focus = (tSurf *) device->pointer_grab->focus;
 	
 	if (focus) {
-		tWin* shsurf = get_shell_surface(focus);
+	//	tWin* shsurf = get_shell_surface(focus);
 	//	if (shsurf)
 	//		activate(shsurf->shell, focus, device);
 	//	else
 			weston_surface_activate(focus, device);
 		
-		weston_surface_from_global(focus, device->x, device->y,
-			   &device->pointer_grab->x, &device->pointer_grab->y);
+		weston_surface_from_global(focus, device->x, device->y, &device->pointer_grab->x, &device->pointer_grab->y);
 	}
 }
 
@@ -927,6 +922,27 @@ WL_EXPORT void		weston_surface_restack				(tSurf *surface, struct wl_list *below
 }
 
 
+void				Surf_input_regionSet				(tSurf *psurf, int32_t x, int32_t y, int32_t width, int32_t height)
+{
+	struct weston_region *region;
+	
+	pixman_region32_init_rect(&psurf->input, 0, 0, psurf->geometry.width, psurf->geometry.height);
+	
+	int restack = 0;
+	if (psurf->border.left == 0 && psurf->input.extents.x1 != 0) {
+		printf ("THIS IS IT  THIS IS IT  THIS IS IT  THIS IS IT  THIS IS IT  THIS IS IT  THIS IS IT  THIS IS IT  THIS IS IT  THIS IS IT\n");
+		restack = 1;
+	}
+	psurf->border.left = psurf->input.extents.x1;
+	psurf->border.top = psurf->input.extents.y1;
+	
+	psurf->border.right = psurf->geometry.width - psurf->input.extents.x2;
+	psurf->border.bottom = psurf->geometry.height - psurf->input.extents.y2;
+	
+	if (restack)
+		shell_restack ();
+//	weston_compositor_schedule_repaint(gShell.pEC);
+}
 
 
 WL_EXPORT void		weston_compositor_damage_all			(tComp *compositor)
@@ -1431,22 +1447,21 @@ WL_EXPORT void		notify_motion					(struct wl_input_device *device, uint32_t time
 		else  if (y >= max_y)
 			y = max_y;
 	}
-
-	weston_input_update_drag_surface(device,
-					 x - device->x, y - device->y);
-
+	
+	weston_input_update_drag_surface(device, x - device->x, y - device->y);
+	
 	device->x = x;
 	device->y = y;
-
-	wl_list_for_each(output, &ec->output_list, link)
-		if (output->zoom.active &&
-		    pixman_region32_contains_point(&output->region, x, y, NULL))
+	
+	wl_list_for_each(output, &ec->output_list, link) {
+		if (output->zoom.active && pixman_region32_contains_point(&output->region, x, y, NULL)) {
 			weston_output_update_zoom(output, x, y);
-
+		}
+	}
 	weston_device_repick(device);
+	
 	interface = device->pointer_grab->interface;
-	interface->motion(device->pointer_grab, time,
-			  device->pointer_grab->x, device->pointer_grab->y);
+	interface->motion(device->pointer_grab, time, device->pointer_grab->x, device->pointer_grab->y);
 
 	if (wd->sprite) {
 		weston_surface_set_position(wd->sprite,
@@ -1660,11 +1675,10 @@ WL_EXPORT void		notify_touch					(struct wl_input_device *device, uint32_t time,
 
 
 
-static void
-input_device_attach(struct wl_client *client,
-		    struct wl_resource *resource,
-		    uint32_t serial,
-		    struct wl_resource *buffer_resource, int32_t x, int32_t y)
+static void			input_device_attach				(struct wl_client *client,
+											struct wl_resource *resource,
+											uint32_t serial,
+											struct wl_resource *buffer_resource, int32_t x, int32_t y)
 {
 //	dTrace_E("");
 	tFocus *device = resource->data;
@@ -2801,30 +2815,6 @@ center_on_output(tSurf *surface,
 
 tWin*		get_shell_surface			(tSurf *surface);
 
-static void
-shell_configuration(struct wl_shell *shell)
-{
-	char *config_file;
-	char *path = NULL;
-	int duration = 60;
-
-	struct config_key saver_keys[] = {
-		{ "path",       CONFIG_KEY_STRING,  &path },
-		{ "duration",   CONFIG_KEY_INTEGER, &duration },
-	};
-
-	struct config_section cs[] = {
-		{ "screensaver", saver_keys, ARRAY_LENGTH(saver_keys), NULL },
-	};
-
-	config_file = config_file_path("weston.ini");
-	parse_config_file(config_file, cs, ARRAY_LENGTH(cs), shell);
-	free(config_file);
-
-	gShell.screensaver.path = path;
-	gShell.screensaver.duration = duration;
-}
-
 
 /** *********************************** shell grabs manipulation ************************************ **/
 
@@ -3189,15 +3179,13 @@ weston_surface_swap(tSurf *es,
 
 /** *********************************** shell other ************************************ **/
 
-static tOutput *
-get_default_output(tComp *compositor)
+static tOutput *	get_default_output				(tComp *compositor)
 {
 	return container_of(compositor->output_list.next,
 			    tOutput, link);
 }
 
-void
-shell_unset_fullscreen(tWin *shsurf)
+void			shell_unset_fullscreen				(tWin *shsurf)
 {
 	/* undo all fullscreen things here */
 	shsurf->fullscreen.type = WL_SHELL_SURFACE_FULLSCREEN_METHOD_DEFAULT;
@@ -3212,8 +3200,7 @@ shell_unset_fullscreen(tWin *shsurf)
 				    shsurf->saved_x, shsurf->saved_y);
 }
 
-int
-reset_shell_surface_type(tWin *surface)
+int			reset_shell_surface_type			(tWin *surface)
 {
 	switch (surface->type) {
 	case SHELL_SURFACE_FULLSCREEN:
@@ -3243,29 +3230,25 @@ reset_shell_surface_type(tWin *surface)
 	case SHELL_SURFACE_POPUP:
 		break;
 	}
-
+	
 	surface->type = SHELL_SURFACE_NONE;
 	return 0;
 }
 
-void
-shell_surface_set_toplevel(struct wl_client *client,
-			   struct wl_resource *resource)
+void			shell_surface_set_toplevel			(struct wl_client *client, struct wl_resource *resource)
 
 {
 	tWin *surface = resource->data;
-
 	if (reset_shell_surface_type(surface))
 		return;
-
+	
 	surface->type = SHELL_SURFACE_TOPLEVEL;
 }
 
-void
-shell_surface_set_transient(struct wl_client *client,
-			    struct wl_resource *resource,
-			    struct wl_resource *parent_resource,
-			    int x, int y, uint32_t flags)
+void			shell_surface_set_transient			(struct wl_client *client,
+										struct wl_resource *resource,
+										struct wl_resource *parent_resource,
+										int x, int y, uint32_t flags)
 {
 	tWin *shsurf = resource->data;
 	tSurf *es = shsurf->surface;
@@ -3283,11 +3266,6 @@ shell_surface_set_transient(struct wl_client *client,
 	shsurf->type = SHELL_SURFACE_TRANSIENT;
 }
 
-struct wl_shell *
-shell_surface_get_shell(tWin *shsurf)
-{
-	return shsurf->shell;
-}
 
 static int
 get_output_panel_height(struct wl_shell *wlshell,tOutput *output)
@@ -3314,7 +3292,6 @@ shell_surface_set_maximized(struct wl_client *client,
 {
 	tWin *shsurf = resource->data;
 	tSurf *es = shsurf->surface;
-	struct wl_shell *wlshell = NULL;
 	uint32_t edges = 0, panel_height = 0;
 
 	/* get the default output, if the client set it as NULL
@@ -3331,9 +3308,8 @@ shell_surface_set_maximized(struct wl_client *client,
 	shsurf->saved_y = es->geometry.y;
 	shsurf->saved_position_valid = true;
 
-	wlshell = shell_surface_get_shell(shsurf);
-	panel_height = get_output_panel_height(wlshell, es->output);
-	edges = WL_SHELL_SURFACE_RESIZE_TOP|WL_SHELL_SURFACE_RESIZE_LEFT;
+	panel_height = get_output_panel_height (&gShell, es->output);
+	edges = WL_SHELL_SURFACE_RESIZE_TOP | WL_SHELL_SURFACE_RESIZE_LEFT;
 
 	wl_shell_surface_send_configure(&shsurf->resource, edges,
 					es->output->current->width,
@@ -3416,7 +3392,6 @@ static void
 shell_stack_fullscreen(tWin *shsurf)
 {
 	tSurf *surface = shsurf->surface;
-	struct wl_shell *shell = shell_surface_get_shell(shsurf);
 
 //	wl_list_remove(&surface->layer_link);
 //	wl_list_remove(&shsurf->fullscreen.black_surface->layer_link);
@@ -3627,6 +3602,14 @@ void					shell_handle_surface_destroy		(struct wl_listener *listener, void *data
 	wl_resource_destroy(&shsurf->resource);
 }
 
+
+
+
+
+
+
+
+
 tWin *		get_shell_surface				(tSurf *surface)
 {
 	struct wl_listener *listener;
@@ -3644,64 +3627,6 @@ static const struct wl_shell_interface shell_implementation = {
 	shell_get_shell_surface
 };
 
-static void
-handle_screensaver_sigchld(struct weston_process *proc, int status)
-{
-	proc->pid = 0;
-}
-
-static void
-launch_screensaver(struct wl_shell *shell)
-{
-	if (gShell.screensaver.binding)
-		return;
-
-	if (!gShell.screensaver.path)
-		return;
-
-	if (gShell.screensaver.process.pid != 0) {
-		fprintf(stderr, "old screensaver still running\n");
-		return;
-	}
-
-	weston_client_launch(gShell.pEC,
-			   &gShell.screensaver.process,
-			   gShell.screensaver.path,
-			   handle_screensaver_sigchld);
-}
-
-static void
-terminate_screensaver(struct wl_shell *shell)
-{
-	if (gShell.screensaver.process.pid == 0)
-		return;
-
-	kill(gShell.screensaver.process.pid, SIGTERM);
-}
-
-static void
-show_screensaver(struct wl_shell *shell, tWin *surface)
-{
-	struct wl_list *list;
-
-//	if (gShell.lock_surface)
-//		list = &gShell.lock_surface->surface->layer_link;
-//	else
-//		list = &gShell.lock_layer.surface_list;
-
-//	wl_list_remove(&surface->surface->layer_link);
-//	wl_list_insert(list, &surface->surface->layer_link);
-//	surface->surface->output = surface->output;
-//	weston_surface_damage(surface->surface);
-}
-
-static void
-hide_screensaver(struct wl_shell *shell, tWin *surface)
-{
-//	wl_list_remove(&surface->surface->layer_link);
-//	wl_list_init(&surface->surface->layer_link);
-//	surface->surface->output = NULL;
-}
 
 static void
 desktop_shell_set_background(struct wl_client *client,
@@ -3816,12 +3741,7 @@ static void
 resume_desktop(struct wl_shell *shell)
 {
 	tWin *tmp;
-
-	wl_list_for_each(tmp, &gShell.screensaver.surfaces, link)
-		hide_screensaver(shell, tmp);
-
-	terminate_screensaver(shell);
-
+	
 //	wl_list_remove(&gShell.lock_layer.link);
 //	wl_list_insert(&gShell.pEC->cursor_layer.link, &gShell.fullscreen_layer.link);
 //	wl_list_insert(&gShell.fullscreen_layer.link, &gShell.panel_layer.link);
@@ -4341,8 +4261,7 @@ void		map			(struct wl_shell *shell, tSurf *surface, int32_t width, int32_t heig
 	case SHELL_SURFACE_SCREENSAVER:
 		/* If locked, show it. */
 		if (gShell.locked) {
-			show_screensaver(shell, shsurf);
-			compositor->idle_time = gShell.screensaver.duration;
+		//	show_screensaver(shell, shsurf);
 			weston_compositor_wake(compositor);
 			if (!gShell.lock_surface)
 				compositor->state = WESTON_COMPOSITOR_IDLE;
@@ -4537,8 +4456,8 @@ void		shell_get_shell_surface		(struct wl_client *client,
 	dTrace_L("");
 }
 
-tWin*
-Shell_get_surface(struct wl_client *client, tSurf *surface)
+
+tWin*		Shell_get_surface			(struct wl_client *client, tSurf *surface)
 {
 	dTrace_E("");
 	tWin *shsurf;
@@ -4672,17 +4591,12 @@ lock(struct wl_listener *listener, void *data)
 //	wl_list_remove(&gShell.toplevel_layer.link);
 //	wl_list_remove(&gShell.fullscreen_layer.link);
 //	wl_list_insert(&gShell.pEC->cursor_layer.link, &gShell.lock_layer.link);
-
-	launch_screensaver(shell);
-
-	wl_list_for_each(shsurf, &gShell.screensaver.surfaces, link)
-		show_screensaver(shell, shsurf);
-
-	if (!wl_list_empty(&gShell.screensaver.surfaces)) {
+	
+/*	if (!wl_list_empty(&gShell.screensaver.surfaces)) {
 		gShell.pEC->idle_time = gShell.screensaver.duration;
 		weston_compositor_wake(gShell.pEC);
 		gShell.pEC->state = WESTON_COMPOSITOR_IDLE;
-	}
+	}*/
 
 	/* reset pointer foci */
 	weston_compositor_schedule_repaint(gShell.pEC);
@@ -4777,49 +4691,8 @@ launch_desktop_shell_process(struct wl_shell *shell)
 	return 0;
 }
 
-static void
-bind_shell(struct wl_client *client, void *data, uint32_t version, uint32_t id)
-{
-	struct wl_shell *shell = data;
 
-	wl_client_add_object(client, &wl_shell_interface,
-			     &shell_implementation, id, shell);
-}
 
-static void
-unbind_desktop_shell(struct wl_resource *resource)
-{
-	struct wl_shell *shell = resource->data;
-
-	if (gShell.locked)
-		resume_desktop(shell);
-
-	gShell.child.desktop_shell = NULL;
-	gShell.prepare_event_sent = false;
-	free(resource);
-}
-
-static void
-bind_desktop_shell(struct wl_client *client,
-		   void *data, uint32_t version, uint32_t id)
-{
-	struct wl_shell *shell = data;
-	struct wl_resource *resource;
-
-	resource = wl_client_add_object(client, &desktop_shell_interface,
-					&desktop_shell_implementation,
-					id, shell);
-
-	if (client == gShell.child.client) {
-		resource->destroy = unbind_desktop_shell;
-		gShell.child.desktop_shell = resource;
-		return;
-	}
-
-	wl_resource_post_error(resource, WL_DISPLAY_ERROR_INVALID_OBJECT,
-			       "permission to bind desktop_shell denied");
-	wl_resource_destroy(resource);
-}
 
 /*
 static void
@@ -5411,8 +5284,79 @@ debug_repaint_binding(struct wl_input_device *device, uint32_t time,
 	}
 }
 
-static void
-shell_destroy(struct wl_listener *listener, void *data)
+
+
+
+
+
+
+
+
+
+
+
+
+
+static void		shell_configuration		(struct wl_shell *shell)
+{
+	char *config_file;
+	char *path = NULL;
+	int duration = 60;
+
+	struct config_key saver_keys[] = {
+		{ "path",       CONFIG_KEY_STRING,  &path },
+		{ "duration",   CONFIG_KEY_INTEGER, &duration },
+	};
+
+	struct config_section cs[] = {
+		{ "screensaver", saver_keys, ARRAY_LENGTH(saver_keys), NULL },
+	};
+
+	config_file = config_file_path("weston.ini");
+	parse_config_file(config_file, cs, ARRAY_LENGTH(cs), shell);
+	free(config_file);
+}
+
+
+static void		bind_shell				(struct wl_client *client, void *data, uint32_t version, uint32_t id)
+{
+	wl_client_add_object(client, &wl_shell_interface, &shell_implementation, id, &gShell);
+}
+
+static void		unbind_desktop_shell		(struct wl_resource *resource)
+{
+	struct wl_shell *shell = resource->data;
+
+	if (gShell.locked)
+		resume_desktop(shell);
+
+	gShell.child.desktop_shell = NULL;
+	gShell.prepare_event_sent = false;
+	free(resource);
+}
+
+static void		bind_desktop_shell		(struct wl_client *client, void *data, uint32_t version, uint32_t id)
+{
+	struct wl_shell *shell = &gShell;
+	struct wl_resource *resource;
+
+	resource = wl_client_add_object(client, &desktop_shell_interface, &desktop_shell_implementation, id, shell);
+
+	if (client == gShell.child.client) {
+		resource->destroy = unbind_desktop_shell;
+		gShell.child.desktop_shell = resource;
+		return;
+	}
+
+	wl_resource_post_error(resource, WL_DISPLAY_ERROR_INVALID_OBJECT,
+			       "permission to bind desktop_shell denied");
+	wl_resource_destroy(resource);
+}
+
+
+
+
+static void		shell_destroy			(struct wl_listener *listener, void *data)
 {
 	struct wl_shell *shell =
 		container_of(listener, struct wl_shell, destroy_listener);
@@ -5420,22 +5364,18 @@ shell_destroy(struct wl_listener *listener, void *data)
 	if (gShell.child.client)
 		wl_client_destroy(gShell.child.client);
 
-	free(gShell.screensaver.path);
+//	free(gShell.screensaver.path);
 //	free(shell);
 }
 
-int
-shell_init(tComp *ec);
 
-WL_EXPORT int
-shell_init(tComp *ec)
+
+
+
+WL_EXPORT int	shell_init			(tComp *ec)
 {
 	struct wl_shell *shell = &gShell;
-
-//	shell = malloc(sizeof *shell);
-//	if (shell == NULL)
-//		return -1;
-
+	
 	memset(shell, 0, sizeof *shell);
 	gShell.pEC = ec;
 	int i;
@@ -5451,25 +5391,22 @@ shell_init(tComp *ec)
 
 	wl_list_init(&gShell.backgrounds);
 	wl_list_init(&gShell.panels);
-	wl_list_init(&gShell.screensaver.surfaces);
-
+//	wl_list_init(&gShell.screensaver.surfaces);
+	
 //	weston_layer_init(&gShell.fullscreen_layer, &ec->cursor_layer.link);
 //	weston_layer_init(&gShell.panel_layer, &gShell.fullscreen_layer.link);
 //	weston_layer_init(&gShell.toplevel_layer, &gShell.panel_layer.link);
 //	weston_layer_init(&gShell.background_layer, &gShell.toplevel_layer.link);
 //	wl_list_init(&gShell.lock_layer.surface_list);
-
+	
 	shell_configuration(shell);
-
-	if (wl_display_add_global(ec->wl_display, &wl_shell_interface,
-				  shell, bind_shell) == NULL)
+	
+	if (wl_display_add_global(ec->wl_display, &wl_shell_interface, 0, bind_shell) == NULL)
 		return -1;
-
-	if (wl_display_add_global(ec->wl_display,
-				  &desktop_shell_interface,
-				  shell, bind_desktop_shell) == NULL)
+	
+	if (wl_display_add_global(ec->wl_display, &desktop_shell_interface, 0, bind_desktop_shell) == NULL)
 		return -1;
-
+	
 //	if (wl_display_add_global(ec->wl_display, &screensaver_interface,
 //				  shell, bind_screensaver) == NULL)
 //		return -1;

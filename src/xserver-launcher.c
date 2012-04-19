@@ -613,8 +613,10 @@ weston_wm_handle_configure_notify(struct weston_wm *wm, xcb_generic_event_t *eve
 	
 	struct weston_wm_window *window = hash_table_lookup(wm->window_hash, configure_notify->window);
 	
-	if (window && window->surface)
+	if (window && window->surface) {
 		weston_surface_configure (window->surface, window->surface->geometry.x, window->surface->geometry.y, configure_notify->width, configure_notify->height);
+		Surf_input_regionSet (window->surface, 0, 0, configure_notify->width, configure_notify->height);
+	}
 }
 
 static void
@@ -767,8 +769,7 @@ weston_wm_handle_map_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 		}
 		free(reply);
 	}
-	/*
-	if (xwl_screen->shell) {
+/*	if (xwl_screen->shell) {
 		xf86DrvMsgVerb(0, X_INFO, 0, "AEUEUEOUUEAEUEUEOUUEAEUEUEOUUE  xwl_realize_window  A666\n");
 	//	xwl_window->shsurf = wl_shell_get_shell_surface (xwl_screen->shell, xwl_window->surface);
 		
@@ -865,7 +866,15 @@ weston_wm_handle_map_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 				}
 			}
 		}else {
-			shell_surface_set_toplevel (wm->server->client, (struct wl_resource*)window->shsurf);
+			window->shsurf->type = SHELL_SURFACE_TOPLEVEL;
+			
+			weston_surface_configure(window->shsurf->surface,
+				window->size_hints.x,
+				window->size_hints.y,
+				window->size_hints.width,
+				window->size_hints.height
+			);
+		//	shell_surface_set_toplevel (wm->server->client, (struct wl_resource*)window->shsurf);
 		}
 	}
 //	tSurf *surface = surface_resource->data;
@@ -883,6 +892,24 @@ weston_wm_handle_map_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 	weston_wm_activate(wm, window, XCB_TIME_CURRENT_TIME);
 }
 
+static void
+weston_wm_handle_unmap_notify(struct weston_wm *wm, xcb_generic_event_t *event)
+{
+	xcb_unmap_notify_event_t *unmap_notify = (xcb_map_notify_event_t *) event;
+	
+	fprintf(stderr, "XCB_UNMAP_NOTIFY (window %d)\n", unmap_notify->window);
+	
+	struct weston_wm_window *window = hash_table_lookup(wm->window_hash, unmap_notify->window);
+	
+	if (!window) {
+		fprintf(stderr, "XCB_UNMAP_NOTIFY no window\n");
+		return;
+	}
+	if (window->surface) {
+	//	window->shsurf = Shell_get_surface(wm->server->client, (struct wl_resource*)window->surface);
+		
+	}
+}
 
 
 
@@ -1188,13 +1215,11 @@ weston_wm_handle_property_notify(struct weston_wm *wm, xcb_generic_event_t *even
 static void
 weston_wm_handle_create_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 {
-	xcb_create_notify_event_t *create_notify =
-		(xcb_create_notify_event_t *) event;
+	xcb_create_notify_event_t *create_notify = (xcb_create_notify_event_t *) event;
 	struct weston_wm_window *window;
 	uint32_t values[1];
 
-	fprintf(stderr, "XCB_CREATE_NOTIFY (window %d)\n",
-		create_notify->window);
+	fprintf(stderr, "XCB_CREATE_NOTIFY (window %d)\n", create_notify->window);
 
 	window = malloc(sizeof *window);
 	if (window == NULL) {
@@ -1203,9 +1228,21 @@ weston_wm_handle_create_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 	}
 
 	values[0] = XCB_EVENT_MASK_PROPERTY_CHANGE;
-	xcb_change_window_attributes(wm->conn, create_notify->window,
-				     XCB_CW_EVENT_MASK, values);
-
+	xcb_change_window_attributes(wm->conn, create_notify->window, XCB_CW_EVENT_MASK, values);
+	
+	fprintf(stderr, "XCB_CREATE_NOTIFY (window %d) prop %d %d %d %d\n", create_notify->window,
+		create_notify->x, create_notify->y,
+		create_notify->width, create_notify->height
+	);
+	window->size_hints.x = create_notify->x;
+	window->size_hints.y = create_notify->y;
+	window->size_hints.width = create_notify->width;
+	window->size_hints.height = create_notify->height;
+//	int16_t        x; /**<  */
+//	int16_t        y; /**<  */
+//	uint16_t       width; /**<  */
+//	uint16_t       height; /**<  */
+	
 	memset(window, 0, sizeof *window);
 	window->id = create_notify->window;
 	hash_table_insert(wm->window_hash, window->id, window);
@@ -1227,7 +1264,7 @@ weston_wm_handle_destroy_notify(struct weston_wm *wm, xcb_generic_event_t *event
 			destroy_notify->window);
 		return;
 	}
-
+	
 	fprintf(stderr, "destroy window %p\n", window);
 	hash_table_remove(wm->window_hash, window->id);
 	if (window->surface)
@@ -1312,7 +1349,8 @@ weston_wm_handle_event(int fd, uint32_t mask, void *data)
 			weston_wm_handle_map_notify(wm, event);
 			break;
 		case XCB_UNMAP_NOTIFY:
-			fprintf(stderr, "XCB_UNMAP_NOTIFY\n");
+		//	fprintf(stderr, "XCB_UNMAP_NOTIFY\n");
+			weston_wm_handle_unmap_notify(wm, event);
 			break;
 		case XCB_CONFIGURE_REQUEST:
 			weston_wm_handle_configure_request(wm, event);
@@ -1728,8 +1766,7 @@ get_wm_window(tSurf *surface)
 }
 
 static void
-xserver_set_window_id(struct wl_client *client, struct wl_resource *resource,
-		      struct wl_resource *surface_resource, uint32_t id)
+xserver_set_window_id(struct wl_client *client, struct wl_resource *resource, struct wl_resource *surface_resource, uint32_t id)
 {
 	struct weston_xserver *wxs = resource->data;
 	struct weston_wm *wm = wxs->wm;
@@ -1738,19 +1775,21 @@ xserver_set_window_id(struct wl_client *client, struct wl_resource *resource,
 
 	if (client != wxs->client)
 		return;
-
-	window = hash_table_lookup(wm->window_hash, id);
-	if (window == NULL) {
+	
+	window = NULL;
+//	while (!window)
+		window = hash_table_lookup(wm->window_hash, id);
+	if (window == NULL)
+	{
 		fprintf(stderr, "set_window_id for unknown window %d\n", id);
 		return;
 	}
-
+	
 	fprintf(stderr, "set_window_id %d for surface %p\n", id, surface);
-
+	
 	window->surface = (tSurf *) surface;
 	window->surface_destroy_listener.notify = surface_destroy;
-	wl_signal_add(&surface->resource.destroy_signal,
-		      &window->surface_destroy_listener);
+	wl_signal_add(&surface->resource.destroy_signal, &window->surface_destroy_listener);
 }
 
 static const struct xserver_interface xserver_implementation = {
@@ -1767,10 +1806,8 @@ bind_xserver(struct wl_client *client,
 	 * don't start the wm. */
 	if (client != wxs->client)
 		return;
-
-	wxs->resource = 
-		wl_client_add_object(client, &xserver_interface,
-				     &xserver_implementation, id, wxs);
+	
+	wxs->resource = wl_client_add_object(client, &xserver_interface, &xserver_implementation, id, wxs);
 
 	wxs->wm = weston_wm_create(wxs);
 	if (wxs->wm == NULL) {
@@ -1937,7 +1974,7 @@ weston_xserver_init(struct weston_compositor *compositor)
 
 	mxs->display = 0;
 
- retry:
+retry:
 	if (create_lockfile(mxs->display, lockfile, sizeof lockfile) < 0) {
 		if (errno == EAGAIN) {
 			goto retry;

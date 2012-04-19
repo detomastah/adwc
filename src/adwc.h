@@ -224,20 +224,22 @@ struct weston_compositor
 {
 	struct wl_shm *shm;
 	struct wl_signal destroy_signal;
-
+	
 	EGLDisplay display;
 	EGLContext context;
 	EGLConfig config;
 	GLuint fbo;
+	
 	struct weston_shader texture_shader;
 	struct weston_shader solid_shader;
 	struct weston_shader *current_shader;
+	
 	struct wl_display *wl_display;
-
+	
 	struct wl_signal activate_signal;
 	struct wl_signal lock_signal;
 	struct wl_signal unlock_signal;
-
+	
 	struct wl_event_loop *input_loop;
 	struct wl_event_source *input_loop_source;
 	
@@ -255,18 +257,19 @@ struct weston_compositor
 	struct wl_list surface_list;	//list of what the backend draws?
 	
 	struct wl_list binding_list;
+	
 	uint32_t state;
 	struct wl_event_source *idle_source;
 	uint32_t idle_inhibit;
 	int option_idle_time;		/* default timeout, s */
 	int idle_time;			/* effective timeout, s */
-
+	
 	/* Repaint state. */
 	struct wl_array vertices, indices;
 	pixman_region32_t damage;
-
+	
 	uint32_t focus;
-
+	
 	PFNGLEGLIMAGETARGETRENDERBUFFERSTORAGEOESPROC
 		image_target_renderbuffer_storage;
 	PFNGLEGLIMAGETARGETTEXTURE2DOESPROC image_target_texture_2d;
@@ -275,10 +278,10 @@ struct weston_compositor
 	PFNEGLBINDWAYLANDDISPLAYWL bind_display;
 	PFNEGLUNBINDWAYLANDDISPLAYWL unbind_display;
 	int has_bind_display;
-
+	
 	void (*destroy)(tComp *ec);
 	int (*authenticate)(tComp *c, uint32_t id);
-
+	
 	struct screenshooter *screenshooter;
 	int launcher_sock;
 };
@@ -303,7 +306,6 @@ struct weston_region
 struct weston_surface
 {
 	struct wl_surface surface;
-	
 	struct wl_client* client;
 	
 	GLuint texture;
@@ -364,18 +366,10 @@ enum {
 struct wl_shell
 {
 	tComp *pEC;
-
+	
 	struct wl_listener lock_listener;
 	struct wl_listener unlock_listener;
 	struct wl_listener destroy_listener;
-
-//	struct weston_layer fullscreen_layer;
-//	struct weston_layer panel_layer;
-//	struct weston_layer toplevel_layer;
-//	struct weston_layer background_layer;
-//	struct weston_layer lock_layer;
-	
-//	struct weston_layer lock_layer;
 	
 	struct {
 		struct weston_process process;
@@ -391,18 +385,18 @@ struct wl_shell
 
 	tWin *lock_surface;
 	struct wl_listener lock_surface_listener;
-
+	
 	struct wl_list backgrounds;
 	struct wl_list panels;
 	
-	struct {
+/*	struct {
 		char *path;
 		int duration;
 		struct wl_resource *binding;
 		struct wl_list surfaces;
 		struct weston_process process;
-	} screensaver;
-
+	}screensaver;*/
+	
 	tSurf *debug_repaint_surface;
 	
 	struct wl_list L[L_NUM];	//array with lists of windows
@@ -534,6 +528,10 @@ struct weston_xserver {
 	struct wl_listener destroy_listener;
 };
 
+
+
+
+void				Surf_input_regionSet				(tSurf *psurf, int32_t x, int32_t y, int32_t width, int32_t height);
 
 
 void
