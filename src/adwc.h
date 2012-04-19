@@ -178,21 +178,6 @@ struct weston_shader {
 	GLint texwidth_uniform;
 };
 
-/*
-struct weston_animation {
-//	void (*frame)(struct weston_animation *animation,
-//		      struct weston_output *output, uint32_t msecs);
-//	struct wl_list link;
-};/**/
-/*
-struct weston_spring {
-	double k;
-	double friction;
-	double current;
-	double target;
-	double previous;
-	uint32_t timestamp;
-};*/
 
 enum {
 	WESTON_COMPOSITOR_ACTIVE,
@@ -226,27 +211,21 @@ struct weston_compositor {
 
 	struct wl_event_loop *input_loop;
 	struct wl_event_source *input_loop_source;
-
+	
 	/* There can be more than one, but not right now... */
 	struct wl_input_device *input_device;
-
-	struct weston_layer fade_layer;
-	struct weston_layer cursor_layer;	//shell attaches its layers to this?
-
+	
+//	struct weston_layer fade_layer;
+//	struct weston_layer cursor_layer;	//shell attaches its layers to this?
+	
 	struct wl_list output_list;
 	struct wl_list input_device_list;
-	struct wl_list layer_list;
+	
+//	struct wl_list layer_list;
 	
 	struct wl_list surface_list;	//list of what the backend draws?
 	
 	struct wl_list binding_list;
-/*	struct wl_list animation_list;
-	struct {
-		struct weston_spring spring;
-		struct weston_animation animation;
-		struct weston_surface *surface;
-	} fade;*/
-
 	uint32_t state;
 	struct wl_event_source *idle_source;
 	uint32_t idle_inhibit;
@@ -288,35 +267,14 @@ struct weston_region {
 	pixman_region32_t region;
 };
 
-/* Using weston_surface transformations
- *
- * To add a transformation to a surface, create a struct weston_transform, and
- * add it to the list surface->geometry.transformation_list. Whenever you
- * change the list, anything under surface->geometry, or anything in the
- * weston_transforms linked into the list, you must set
- * surface->geometry.dirty = 1.
- *
- * The order in the list defines the order of transformations. Let the list
- * contain the transformation matrices M1, ..., Mn as head to tail. The
- * transformation is applied to surface-local coordinate vector p as
- *    P = Mn * ... * M2 * M1 * p
- * to produce the global coordinate vector P. The total transform
- *    Mn * ... * M2 * M1
- * is cached in surface->transform.matrix, and the inverse of it in
- * surface->transform.inverse.
- *
- * The list always contains surface->transform.position transformation, which
- * is the translation by surface->geometry.x and y.
- *
- * If you want to apply a transformation in local coordinates, add your
- * weston_transform to the head of the list. If you want to apply a
- * transformation in global coordinates, add it to the tail of the list.
- */
+
+typedef struct weston_surface tSurf;
 
 struct weston_surface {
 	struct wl_surface surface;
-	struct weston_compositor *compositor;
+	
 	struct wl_client* client;
+	
 	GLuint texture;
 	pixman_region32_t clip;
 	pixman_region32_t damage;
@@ -324,56 +282,30 @@ struct weston_surface {
 	pixman_region32_t input;
 	int32_t pitch;
 	struct wl_list link;
-	struct wl_list layer_link;
+	
+//	struct wl_list layer_link;
+	
 	struct weston_shader *shader;
 	GLfloat color[4];
 	uint32_t alpha;
-
-	/* Surface geometry state, mutable.
-	 * If you change anything, set dirty = 1.
-	 * That includes the transformations referenced from the list.
-	 */
-	 
+	
 	struct weston_border border;
 	
 	struct {
 		int32_t x, y; /* surface translation on display */
 		int32_t width, height;
-
-		/* struct weston_transform */
-	//	struct wl_list transformation_list;
-		
 		int dirty;
 	} geometry, geometry_ours;
-
-	/* State derived from geometry state, read-only.
-	 * This is updated by weston_surface_update_transform().
-	 */
-/*	struct {
-		pixman_region32_t boundingbox;
-		pixman_region32_t opaque;
-
-		int enabled;
-		struct weston_matrix matrix;
-		struct weston_matrix inverse;
-
-		struct weston_transform position;
-	} transform;*/
-
-	/*
-	 * Which output to vsync this surface to.
-	 * Used to determine, whether to send or queue frame events.
-	 * Must be NULL, if 'link' is not in weston_compositor::surface_list.
-	 */
+	
 	struct weston_output *output;
-
+	
 	struct wl_list frame_callback_list;
-
+	
 	EGLImageKHR image;
-
+	
 	struct wl_buffer *buffer;
 	struct wl_listener buffer_destroy_listener;
-
+	
 	/*
 	 * If non-NULL, this function will be called on surface::attach after
 	 * a new buffer has been set up for this surface. The integer params
@@ -400,7 +332,7 @@ enum {
 };
 
 struct wl_shell {
-	struct weston_compositor *compositor;
+	struct weston_compositor *pEC;
 
 	struct wl_listener lock_listener;
 	struct wl_listener unlock_listener;
@@ -585,15 +517,7 @@ weston_surface_to_global_float(struct weston_surface *surface,
 void
 weston_surface_from_global(struct weston_surface *surface,
 			   int32_t x, int32_t y, int32_t *sx, int32_t *sy);
-/*
-void
-weston_spring_init(struct weston_spring *spring,
-		   double k, double current, double target);
-void
-weston_spring_update(struct weston_spring *spring, uint32_t msec);
-int
-weston_spring_done(struct weston_spring *spring);
-*/
+
 void
 weston_surface_activate(struct weston_surface *surface,
 			struct weston_input_device *device);
@@ -677,14 +601,14 @@ weston_surface_create(struct weston_compositor *compositor);
 
 void
 weston_surface_configure(struct weston_surface *surface,
-			 GLfloat x, GLfloat y, int width, int height);
+			 int32_t x, int32_t y, int width, int height);
 
 void
 weston_surface_restack(struct weston_surface *surface, struct wl_list *below);
 
 void
 weston_surface_set_position(struct weston_surface *surface,
-			    GLfloat x, GLfloat y);
+			    int32_t x, int32_t y);
 
 int
 weston_surface_is_mapped(struct weston_surface *surface);
