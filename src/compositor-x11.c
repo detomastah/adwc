@@ -363,7 +363,7 @@ x11_output_read_pixels(struct weston_output *output_base, void *data)
 				GL_BGRA_EXT, GL_UNSIGNED_BYTE, data);
 }
 
-static int
+static struct x11_output*
 x11_compositor_create_output(struct x11_compositor *c, int x, int y,
 			     int width, int height, int fullscreen)
 {
@@ -391,12 +391,11 @@ x11_compositor_create_output(struct x11_compositor *c, int x, int y,
 
 	output = malloc(sizeof *output);
 	if (output == NULL)
-		return -1;
+		return 0;
 
 	memset(output, 0, sizeof *output);
 
-	output->mode.flags =
-		WL_OUTPUT_MODE_CURRENT | WL_OUTPUT_MODE_PREFERRED;
+	output->mode.flags = WL_OUTPUT_MODE_CURRENT | WL_OUTPUT_MODE_PREFERRED;
 	output->mode.width = width;
 	output->mode.height = height;
 	output->mode.refresh = 60;
@@ -404,8 +403,7 @@ x11_compositor_create_output(struct x11_compositor *c, int x, int y,
 	wl_list_insert(&output->base.mode_list, &output->mode.link);
 
 	output->base.current = &output->mode;
-	weston_output_init(&output->base, &c->base, x, y, width, height,
-			 WL_OUTPUT_FLIPPED);
+	weston_output_init(&output->base, &c->base, x, y, width, height, WL_OUTPUT_FLIPPED);
 
 	values[1] = c->null_cursor;
 	output->window = xcb_generate_id(c->conn);
@@ -458,12 +456,12 @@ x11_compositor_create_output(struct x11_compositor *c, int x, int y,
 				       output->window, NULL);
 	if (!output->egl_surface) {
 		fprintf(stderr, "failed to create window surface\n");
-		return -1;
+		return 0;
 	}
 	if (!eglMakeCurrent(c->base.display, output->egl_surface,
 			    output->egl_surface, c->base.context)) {
 		fprintf(stderr, "failed to make surface current\n");
-		return -1;
+		return 0;
 	}
 
 	loop = wl_display_get_event_loop(c->base.wl_display);
@@ -479,7 +477,7 @@ x11_compositor_create_output(struct x11_compositor *c, int x, int y,
 
 	wl_list_insert(c->base.output_list.prev, &output->base.link);
 
-	return 0;
+	return output;
 }
 
 static struct x11_output *
@@ -839,14 +837,26 @@ x11_compositor_create(struct wl_display *display,
 	/* Can't init base class until we have a current egl context */
 	if (weston_compositor_init(&c->base, display) < 0)
 		return NULL;
-
+	
+	
+	/*
 	for (i = 0, x = 0; i < count; i++) {
-		if (x11_compositor_create_output(c, x, 0, width, height,
-						 fullscreen) < 0)
+		if (x11_compositor_create_output(c, x, 0, width, height, fullscreen) < 0)
 			return NULL;
 		x += width;
-	}
-
+	}*/
+	struct x11_output* out;
+	x = 0;
+	if (!(out = x11_compositor_create_output(c, x, 0, width, height, fullscreen)))
+		return NULL;
+	
+//	Output_Rotate (&out->base, Output_Rotation_eLeft);
+	x += out->base.width;
+	if (!(out = x11_compositor_create_output(c, x, 0, width, height, fullscreen)))
+		return NULL;
+	
+	Output_Rotate (&out->base, Output_Rotation_eLeft);
+	
 	if (x11_input_create(c) < 0)
 		return NULL;
 

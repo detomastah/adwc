@@ -768,10 +768,14 @@ drm_output_set_cursor(struct weston_output *output_base, struct weston_input_dev
 		fprintf(stderr, "failed to set cursor: %s\n", strerror(-ret));
 		goto out;
 	}
-
-	ret = drmModeMoveCursor(c->drm.fd, output->crtc_id,
-				eid->sprite->geometry.x - output->base.x,
-				eid->sprite->geometry.y - output->base.y);
+	{
+		int32_t x = eid->sprite->geometry.x, y = eid->sprite->geometry.y;
+		Output_Focus_CurPosGet (output, eid, &x, &y);
+		
+		ret = drmModeMoveCursor(c->drm.fd, output->crtc_id,
+					x,
+					y);
+	}
 	if (ret) {
 		fprintf(stderr, "failed to move cursor: %s\n", strerror(-ret));
 		goto out;
@@ -1208,10 +1212,12 @@ create_output_for_connector(struct drm_compositor *ec,
 		output->base.backlight_current = drm_get_backlight(output);
 	}
 
-	weston_output_init(&output->base, &ec->base, x, y,
-			   connector->mmWidth, connector->mmHeight,
-			   WL_OUTPUT_FLIPPED);
-
+	weston_output_init(&output->base, &ec->base, x, y, connector->mmWidth, connector->mmHeight, WL_OUTPUT_FLIPPED);
+	
+	if (output->base.current->width == 1920) {
+		Output_Rotate (&output->base, Output_Rotation_eLeft);
+	}
+	
 	wl_list_insert(ec->base.output_list.prev, &output->base.link);
 
 	output->scanout_buffer_destroy_listener.notify =
@@ -1360,7 +1366,7 @@ create_outputs(struct drm_compositor *ec, uint32_t option_connector,
 
 			x += container_of(ec->base.output_list.prev,
 					  struct weston_output,
-					  link)->current->width;
+					  link)->width;
 		}
 
 		drmModeFreeConnector(connector);

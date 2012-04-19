@@ -116,15 +116,28 @@ enum dpms_enum {
 	WESTON_DPMS_OFF
 };
 
+typedef uint8_t tOutput_Rotation;
+enum {
+	Output_Rotation_eNorm,
+	Output_Rotation_eLeft,
+	Output_Rotation_eRight,
+	Output_Rotation_eFull,
+};
+
 
 struct weston_output
 {
 	struct wl_list link;
 	struct wl_global *global;
 	tComp *compositor;
+	
 	struct weston_matrix matrix;
+	
 	struct wl_list frame_callback_list;
+	
 	int32_t x, y, mm_width, mm_height;
+	int32_t width, height;
+	
 	struct weston_border border;
 	pixman_region32_t region;
 	pixman_region32_t previous_damage;
@@ -151,6 +164,7 @@ struct weston_output
 	void (*set_backlight)(tOutput *output, uint32_t value);
 	void (*set_dpms)(tOutput *output, enum dpms_enum level);
 	
+	tOutput_Rotation	Rotation;
 	
 	tTags Tags;
 	
@@ -661,6 +675,12 @@ weston_output_init(tOutput *output, tComp *c,
 		   int x, int y, int width, int height, uint32_t flags);
 void
 weston_output_destroy(tOutput *output);
+
+WL_EXPORT void		Output_Update				(tOutput *pout);
+WL_EXPORT void		Output_Rotate				(tOutput *pout, tOutput_Rotation rot);
+
+WL_EXPORT void		Output_G2L_xy				(tOutput *pout, int32_t *px, int32_t *py);
+WL_EXPORT void		Output_Focus_CurPosGet			(tOutput *pout, tFocus *pfoc, int32_t *px, int32_t *py);
 
 void
 weston_input_device_init(tFocus *device,

@@ -728,15 +728,14 @@ desktop_shell_receive_tag(void *data,
 			uint32_t x,
 		    uint32_t tag_no)
 {
-	int panel_no = 1;
+	int panel_no = 0;
 	printf("Desktop shell tag received %d %d\n", x, tag_no);
 	struct desktop *desktop = data;
 	struct panel *panel;
 	
 	wl_list_for_each(panel, &desktop->panels, desktop_link)
 	{
-		if ((panel_no == 1 && x == 0) || (panel_no == 2 && x == 640))
-		{
+		if (panel_no == x) {
 			struct panel_tag *tag;
 			wl_list_for_each(tag, &panel->tag_list, link)
 			{

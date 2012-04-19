@@ -281,6 +281,9 @@ static void			device_handle_new_drag_icon		(struct wl_listener *listener, void *
 
 /** ************************************ weston_surface ************************************ **/
 
+
+
+
 WL_EXPORT tSurf*		weston_surface_create				(tComp *compositor)
 {
 	dTrace_E("");
@@ -709,8 +712,57 @@ static int			texture_region					(tSurf *es, pixman_region32_t *region)
 	return n;
 }
 
+static int			texture_region_left				(tOutput *pout, tSurf *es, pixman_region32_t *region)
+{
+	tComp *ec = gShell.pEC;
+	GLfloat *v, inv_width, inv_height;
+	int32_t sx, sy;
+	pixman_box32_t *rectangles;
+	unsigned int *p;
+	int i, n;
+	
+	rectangles = pixman_region32_rectangles(region, &n);
+	
+	v = wl_array_add(&ec->vertices, n * 16 * sizeof *v);
+	p = wl_array_add(&ec->indices, n * 6 * sizeof *p);
+	inv_width = 1.0 / es->pitch;
+	inv_height = 1.0 / es->geometry.height;
 
-WL_EXPORT void		weston_surface_draw				(tSurf *es, tOutput *output, pixman_region32_t *damage)
+	for (i = 0; i < n; i++, v += 16, p += 6) {
+		if (i == 0)
+			printf ("\nb:	%d %d %d %d\n", rectangles[i].x1, rectangles[i].y1, rectangles[i].x2, rectangles[i].y2);
+		#define dw(xx,yy)	\
+			weston_surface_from_global (es, rectangles[i].xx/* - pout->x/**/, rectangles[i].yy/* - pout->y/**/, &sx, &sy);	\
+			v[_i++] = pout->x + /**/rectangles[i].yy - pout->y;	\
+			v[_i++] = pout->y + pout->current->height - /**/(rectangles[i].xx - pout->x);	\
+			v[_i++] = sx * inv_width;	\
+			v[_i++] = sy * inv_height;
+		
+		int _i = 0;
+		dw (x1, y1)
+		dw (x1, y2)
+		dw (x2, y1)
+		dw (x2, y2)
+		
+		if (i == 0) {
+			printf ("a:	%f %f %f %f\n", v[_i - 4*4 + 0], v[_i - 4*4 + 1], v[_i - 4*4 + 2], v[_i - 4*4 + 3]);
+			printf ("a:	%f %f %f %f\n", v[_i - 3*4 + 0], v[_i - 3*4 + 1], v[_i - 3*4 + 2], v[_i - 3*4 + 3]);
+			printf ("a:	%f %f %f %f\n", v[_i - 2*4 + 0], v[_i - 2*4 + 1], v[_i - 2*4 + 2], v[_i - 2*4 + 3]);
+			printf ("a:	%f %f %f %f\n", v[_i - 1*4 + 0], v[_i - 1*4 + 1], v[_i - 1*4 + 2], v[_i - 1*4 + 3]);
+		}
+		p[0] = i * 4 + 0;
+		p[1] = i * 4 + 1;
+		p[2] = i * 4 + 2;
+		p[3] = i * 4 + 2;
+		p[4] = i * 4 + 1;
+		p[5] = i * 4 + 3;
+	}
+
+	return n;
+}
+
+
+WL_EXPORT void		weston_surface_draw_norm			(tSurf *es, tOutput *output, pixman_region32_t *damage)
 {
 	tComp *ec = gShell.pEC;
 	GLfloat *v;
@@ -748,18 +800,89 @@ WL_EXPORT void		weston_surface_draw				(tSurf *es, tOutput *output, pixman_regio
 	glUniform1f(es->shader->alpha_uniform, es->alpha / 255.0);
 	glUniform1f(es->shader->texwidth_uniform,
 		    (GLfloat)es->geometry.width / es->pitch);
-
+	
 //	if (es->transform.enabled || output->zoom.active)
 //		filter = GL_LINEAR;
 //	else
 		filter = GL_NEAREST;
-
+	
 	n = texture_region(es, &repaint);
-
+	
 	glBindTexture(GL_TEXTURE_2D, es->texture);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+	
+	v = ec->vertices.data;
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof *v, &v[0]);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof *v, &v[2]);
+	
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
 
+	glDrawElements(GL_TRIANGLES, n * 6, GL_UNSIGNED_INT, ec->indices.data);
+
+	glDisableVertexAttribArray(1);
+	glDisableVertexAttribArray(0);
+
+	ec->vertices.size = 0;
+	ec->indices.size = 0;
+
+out:
+	pixman_region32_fini(&repaint);
+}
+
+WL_EXPORT void		weston_surface_draw_left			(tSurf *es, tOutput *output, pixman_region32_t *damage)
+{
+	tComp *ec = gShell.pEC;
+	GLfloat *v;
+	pixman_region32_t repaint;
+	GLint filter;
+	int n;
+
+	pixman_region32_init(&repaint);
+	
+	pixman_region32_t boundingbox;
+	pixman_region32_init_rect(&boundingbox,
+					  es->geometry.x,
+					  es->geometry.y,
+					  es->geometry.width,
+					  es->geometry.height);
+	
+	pixman_region32_intersect(&repaint,
+				  &boundingbox, damage);
+	pixman_region32_subtract(&repaint, &repaint, &es->clip);
+
+	if (!pixman_region32_not_empty(&repaint))
+		goto out;
+	
+//	if (!es->shader || !es->shader->proj_uniform)
+//		goto out;
+	
+	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+	glEnable(GL_BLEND);
+
+	if (ec->current_shader != es->shader) {
+		glUseProgram(es->shader->program);
+		ec->current_shader = es->shader;
+	}
+
+	glUniformMatrix4fv(es->shader->proj_uniform, 1, GL_FALSE, output->matrix.d);
+	glUniform1i(es->shader->tex_uniform, 0);
+	glUniform4fv(es->shader->color_uniform, 1, es->color);
+	glUniform1f(es->shader->alpha_uniform, es->alpha / 255.0);
+	glUniform1f(es->shader->texwidth_uniform, (GLfloat)es->geometry.width / es->pitch);
+	
+//	if (es->transform.enabled || output->zoom.active)
+//		filter = GL_LINEAR;
+//	else
+		filter = GL_NEAREST;
+	
+	n = texture_region_left(output, es, &repaint);
+	
+	glBindTexture(GL_TEXTURE_2D, es->texture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+	
 	v = ec->vertices.data;
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof *v, &v[0]);
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof *v, &v[2]);
@@ -776,6 +899,21 @@ WL_EXPORT void		weston_surface_draw				(tSurf *es, tOutput *output, pixman_regio
 
 out:
 	pixman_region32_fini(&repaint);
+}
+
+WL_EXPORT void		weston_surface_draw				(tSurf *es, tOutput *pout, pixman_region32_t *damage)
+{
+	switch (pout->Rotation) {
+	case Output_Rotation_eNorm:
+		weston_surface_draw_norm (es, pout, damage);
+		break;
+	case Output_Rotation_eLeft:
+		weston_surface_draw_left (es, pout, damage);
+		break;
+//	case Output_Rotation_eRight:
+//		pout->width = pout->current->height;
+//		pout->height = pout->current->width;
+	}
 }
 
 
@@ -816,8 +954,7 @@ WL_EXPORT void		weston_output_damage				(tOutput *output)
 {
 	tComp *compositor = output->compositor;
 
-	pixman_region32_union(&compositor->damage,
-			      &compositor->damage, &output->region);
+	pixman_region32_union(&compositor->damage, &compositor->damage, &output->region);
 	weston_compositor_schedule_repaint(compositor);
 }
 
@@ -997,6 +1134,7 @@ WL_EXPORT void		weston_surface_assign_output			(tSurf *es)
 	max = 0;
 	pixman_region32_init(&region);
 	wl_list_for_each(output, &ec->output_list, link) {
+		
 		pixman_region32_t boundingbox;
 		pixman_region32_init_rect(&boundingbox,
 						  es->geometry.x,
@@ -1004,9 +1142,8 @@ WL_EXPORT void		weston_surface_assign_output			(tSurf *es)
 						  es->geometry.width,
 						  es->geometry.height);
 		
-		pixman_region32_intersect(&region, &boundingbox,
-					  &output->region);
-
+		pixman_region32_intersect(&region, &boundingbox, &output->region);
+		
 		e = pixman_region32_extents(&region);
 		area = (e->x2 - e->x1) * (e->y2 - e->y1);
 
@@ -1313,8 +1450,8 @@ WL_EXPORT void		notify_motion					(struct wl_input_device *device, uint32_t time
 
 	if (wd->sprite) {
 		weston_surface_set_position(wd->sprite,
-					    device->x - wd->hotspot_x,
-					    device->y - wd->hotspot_y);
+					device->x - wd->hotspot_x,
+					device->y - wd->hotspot_y);
 		
 		weston_surface_update_transform(wd->sprite);
 		weston_compositor_schedule_repaint(ec);
@@ -1973,8 +2110,7 @@ bind_output(struct wl_client *client,
 	struct weston_mode *mode;
 	struct wl_resource *resource;
 
-	resource = wl_client_add_object(client,
-					&wl_output_interface, NULL, id, data);
+	resource = wl_client_add_object(client, &wl_output_interface, NULL, id, data);
 
 	wl_output_send_geometry(resource,
 				output->x,
@@ -1986,10 +2122,10 @@ bind_output(struct wl_client *client,
 
 	wl_list_for_each (mode, &output->mode_list, link) {
 		wl_output_send_mode(resource,
-				    mode->flags,
-				    mode->width,
-				    mode->height,
-				    mode->refresh);
+						mode->flags,
+						mode->width,
+						mode->height,
+						mode->refresh);
 	}
 }
 
@@ -2066,9 +2202,7 @@ compile_shader(GLenum type, const char *source)
 	return s;
 }
 
-static int
-weston_shader_init(struct weston_shader *shader,
-		   const char *vertex_source, const char *fragment_source)
+static int			weston_shader_init(struct weston_shader *shader, const char *vertex_source, const char *fragment_source)
 {
 	char msg[512];
 	GLint status;
@@ -2102,8 +2236,60 @@ weston_shader_init(struct weston_shader *shader,
 	return 0;
 }
 
-WL_EXPORT void
-weston_output_destroy(tOutput *output)
+
+
+/** *********************************** Output ************************************ **/
+
+#define deg2rad	(M_PI/180.0f)
+#define rad2deg	(180.0f/M_PI)
+
+WL_EXPORT void	weston_matrix_rotate(struct weston_matrix *matrix, GLfloat a)
+{
+	struct weston_matrix scale = {
+		{
+			cos(a),		-sin(a),		0,		0,
+			sin(a),		cos(a),		0,		0,
+			0,			0,			1,		0,
+			0,			0,			0,		1
+		}
+	};
+	weston_matrix_multiply(matrix, &scale);
+}
+
+
+WL_EXPORT void		Output_G2L_xy					(tOutput *pout, int32_t *px, int32_t *py)
+{
+	int32_t rx, ry;
+	switch (pout->Rotation) {
+	case Output_Rotation_eNorm:
+		rx = *px - pout->x;
+		ry = *py - pout->y;
+		break;
+	case Output_Rotation_eLeft:
+		rx = *py - pout->y;
+		ry = *px - pout->x;
+		ry = pout->current->height - ry;
+		break;
+//	case Output_Rotation_eRight:
+//		pout->width = pout->current->height;
+//		pout->height = pout->current->width;
+	}
+	*px = rx;
+	*py = ry;
+}
+
+WL_EXPORT void		Output_Focus_CurPosGet				(tOutput *pout, tFocus *pfoc, int32_t *px, int32_t *py)
+{
+	Output_G2L_xy (pout, px, py);
+	int32_t rx = *px, ry = *py;
+//	ry -= pfoc->sprite->geometry.height;
+	*px = rx;
+	*py = ry;
+}
+
+
+
+WL_EXPORT void		weston_output_destroy			(tOutput *output)
 {
 	tComp *c = output->compositor;
 
@@ -2113,8 +2299,7 @@ weston_output_destroy(tOutput *output)
 	wl_display_remove_global(c->wl_display, output->global);
 }
 
-WL_EXPORT void
-weston_output_update_zoom(tOutput *output, int x, int y)
+WL_EXPORT void		weston_output_update_zoom		(tOutput *output, int x, int y)
 {
 	float ratio;
 
@@ -2131,8 +2316,10 @@ weston_output_update_zoom(tOutput *output, int x, int y)
 	weston_output_damage(output);
 }
 
-WL_EXPORT void
-weston_output_update_matrix(tOutput *output)
+
+
+
+WL_EXPORT void		weston_output_update_matrix		(tOutput *output)
 {
 	int flip;
 	struct weston_matrix camera;
@@ -2142,7 +2329,7 @@ weston_output_update_matrix(tOutput *output)
 	weston_matrix_translate(&output->matrix,
 				-(output->x + (output->border.right + output->current->width - output->border.left) / 2.0),
 				-(output->y + (output->border.bottom + output->current->height - output->border.top) / 2.0), 0);
-
+	
 	flip = (output->flags & WL_OUTPUT_FLIPPED) ? -1 : 1;
 	weston_matrix_scale(&output->matrix,
 			    2.0 / (output->current->width + output->border.left + output->border.right),
@@ -2154,36 +2341,62 @@ weston_output_update_matrix(tOutput *output)
 		weston_matrix_invert(&modelview, &camera);
 		weston_matrix_scale(&modelview, output->zoom.magnification, output->zoom.magnification, 1.0);
 		weston_matrix_multiply(&output->matrix, &modelview);
-	}
-
+	}/**/
+	
+//	weston_matrix_rotate(&output->matrix, -90*deg2rad);
+	
 	output->dirty = 0;
 }
 
-WL_EXPORT void
-weston_output_move(tOutput *output, int x, int y)
+WL_EXPORT void		Output_Update				(tOutput *pout)
+{
+	switch (pout->Rotation) {
+	case Output_Rotation_eNorm:
+	case Output_Rotation_eFull:
+		pout->width = pout->current->width;
+		pout->height = pout->current->height;
+		break;
+	case Output_Rotation_eLeft:
+	case Output_Rotation_eRight:
+		pout->width = pout->current->height;
+		pout->height = pout->current->width;
+		break;
+	}
+	pixman_region32_init (&pout->previous_damage);
+	pixman_region32_init_rect (&pout->region, pout->x, pout->y, pout->width, pout->height);
+}
+
+
+
+WL_EXPORT void		weston_output_move			(tOutput *output, int x, int y)
 {
 	output->x = x;
 	output->y = y;
-
-	pixman_region32_init(&output->previous_damage);
-	pixman_region32_init_rect(&output->region, x, y,
-				  output->current->width,
-				  output->current->height);
+	Output_Update (output);
 }
 
-WL_EXPORT void
-weston_output_init(tOutput *output, tComp *c,
-		   int x, int y, int width, int height, uint32_t flags)
+
+
+WL_EXPORT void		Output_Rotate				(tOutput *pout, tOutput_Rotation rot)
+{
+	pout->Rotation = rot;
+	Output_Update (pout);
+}
+
+WL_EXPORT void		weston_output_init			(tOutput *output, tComp *c, int x, int y, int width, int height, uint32_t flags)
 {
 	output->compositor = c;
+	
 	output->x = x;
 	output->y = y;
 	output->border.top = 0;
 	output->border.bottom = 0;
 	output->border.left = 0;
 	output->border.right = 0;
+	
 	output->mm_width = width;
 	output->mm_height = height;
+	
 	output->dirty = 1;
 
 	output->zoom.active = 0;
@@ -2196,12 +2409,10 @@ weston_output_init(tOutput *output, tComp *c,
 	output->flags = flags;
 	weston_output_move(output, x, y);
 	weston_output_damage(output);
-
+	
 	wl_list_init(&output->frame_callback_list);
-
-	output->global =
-		wl_display_add_global(c->wl_display, &wl_output_interface,
-				      output, bind_output);
+	
+	output->global = wl_display_add_global(c->wl_display, &wl_output_interface, output, bind_output);
 	
 	{
 		static tTags s_tags = 1;
@@ -2210,11 +2421,21 @@ weston_output_init(tOutput *output, tComp *c,
 	}
 	
 	wl_list_init(&output->surfaces);
+	
+	output->Rotation = Output_Rotation_eNorm;
 }
 
-static void
-compositor_bind(struct wl_client *client,
-		void *data, uint32_t version, uint32_t id)
+
+
+
+
+
+
+
+
+
+
+static void			compositor_bind				(struct wl_client *client, void *data, uint32_t version, uint32_t id)
 {
 	tComp *compositor = data;
 
@@ -2222,8 +2443,7 @@ compositor_bind(struct wl_client *client,
 			     &compositor_interface, id, compositor);
 }
 
-WL_EXPORT int
-weston_compositor_init(tComp *ec, struct wl_display *display)
+WL_EXPORT int		weston_compositor_init			(tComp *ec, struct wl_display *display)
 {
 	struct wl_event_loop *loop;
 	const char *extensions;
@@ -2312,8 +2532,7 @@ weston_compositor_init(tComp *ec, struct wl_display *display)
 	return 0;
 }
 
-WL_EXPORT void
-weston_compositor_shutdown(tComp *ec)
+WL_EXPORT void		weston_compositor_shutdown		(tComp *ec)
 {
 	tOutput *output, *next;
 
@@ -2332,6 +2551,7 @@ weston_compositor_shutdown(tComp *ec)
 
 	wl_event_loop_destroy(ec->input_loop);
 }
+
 
 static int on_term_signal(int signal_number, void *data)
 {
@@ -3516,8 +3736,8 @@ desktop_shell_set_background(struct wl_client *client,
 
 	desktop_shell_send_configure(resource, 0,
 				     surface_resource,
-				     shsurf->output->current->width,
-				     shsurf->output->current->height);
+				     shsurf->output->width,
+				     shsurf->output->height);
 }
 
 static void
@@ -3784,8 +4004,7 @@ zoom_binding(struct wl_input_device *device, uint32_t time,
 	tOutput *output;
 
 	wl_list_for_each(output, &compositor->output_list, link) {
-		if (pixman_region32_contains_point(&output->region,
-						device->x, device->y, NULL)) {
+		if (pixman_region32_contains_point(&output->region, device->x, device->y, NULL)) {
 			output->zoom.active = 1;
 			output->zoom.level += output->zoom.increment * -value;
 
@@ -4842,7 +5061,14 @@ void		Output_TagSet			(tOutput *out, tTags tags)
 {
 	out->Tags = tags;
 	
-	desktop_shell_send_select_tag(gShell.child.desktop_shell, out->x, out->Tags);
+	tOutput *iout;
+	int i = 0;
+	wl_list_for_each(iout, &gShell.pEC->output_list, link) {
+		if (iout == out)
+			break;
+		i++;
+	}
+	desktop_shell_send_select_tag(gShell.child.desktop_shell, i, out->Tags);
 	gShell.prepare_event_sent = true;
 }
 
@@ -4973,10 +5199,15 @@ void layout(tOutput* output)
 	int n, cols, rows, cn, rn, i, cx, cy, cw, ch, mw, mh, mx, my;
 	tWin* c;
 	
-	mw = output->region.extents.x2 - output->region.extents.x1;
+/*	mw = output->region.extents.x2 - output->region.extents.x1;
 	mh = output->region.extents.y2 - output->region.extents.y1 - 32;
 	mx = output->region.extents.x1;
-	my = output->region.extents.y1 + 32;
+	my = output->region.extents.y1 + 32;*/
+	
+	mw = output->width;
+	mh = output->height - 32;
+	mx = output->x;
+	my = output->y + 32;
 	printf("mw:%d mh:%d mx:%d my:%d\n", mw, mh, mx, my);
 	
 	n = wl_list_length(&output->surfaces);
