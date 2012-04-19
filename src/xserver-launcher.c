@@ -100,7 +100,7 @@ struct weston_wm {
 
 struct weston_wm_window {
 	xcb_window_t id;
-	struct weston_surface *surface;
+	tSurf *surface;
 	struct shell_surface *shsurf;
 	struct wl_listener surface_destroy_listener;
 	char *class;
@@ -113,11 +113,11 @@ struct weston_wm_window {
 
 
 static struct weston_wm_window *
-get_wm_window(struct weston_surface *surface);
+get_wm_window(tSurf *surface);
 
 
 
-WL_EXPORT  bool		weston_wm_window_resize			(struct weston_wm* wm, struct weston_surface* es, int32_t x, int32_t y, int32_t width, int32_t height, bool hints)
+WL_EXPORT  bool		weston_wm_window_resize			(struct weston_wm* wm, tSurf* es, int32_t x, int32_t y, int32_t width, int32_t height, bool hints)
 {
 	struct weston_wm_window* win = get_wm_window(es);
 	/* Real client geometry, please keep it contained to C code at the very least. */
@@ -641,7 +641,7 @@ weston_wm_activate(struct weston_wm *wm,
 static void
 weston_xserver_surface_activate(struct wl_listener *listener, void *data)
 {
-	struct weston_surface *surface = data;
+	tSurf *surface = data;
 	struct weston_wm_window *window = get_wm_window(surface);
 	struct weston_xserver *wxs =
 		container_of(listener,
@@ -819,9 +819,9 @@ weston_wm_handle_map_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 						    int x, int y, uint32_t flags)
 			{
 				struct shell_surface *shsurf = resource->data;
-				struct weston_surface *es = shsurf->surface;
+				tSurf *es = shsurf->surface;
 				struct shell_surface *pshsurf = parent_resource->data;
-				struct weston_surface *pes = pshsurf->surface;
+				tSurf *pes = pshsurf->surface;
 
 				if (reset_shell_surface_type(shsurf))
 					return;
@@ -868,7 +868,7 @@ weston_wm_handle_map_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 			shell_surface_set_toplevel (wm->server->client, (struct wl_resource*)window->shsurf);
 		}
 	}
-//	struct weston_surface *surface = surface_resource->data;
+//	tSurf *surface = surface_resource->data;
 //	struct shell_surface *shsurf;
 	
 	
@@ -1714,7 +1714,7 @@ surface_destroy(struct wl_listener *listener, void *data)
 }
 
 static struct weston_wm_window *
-get_wm_window(struct weston_surface *surface)
+get_wm_window(tSurf *surface)
 {
 	struct wl_resource *resource = &surface->surface.resource;
 	struct wl_listener *listener;
@@ -1747,7 +1747,7 @@ xserver_set_window_id(struct wl_client *client, struct wl_resource *resource,
 
 	fprintf(stderr, "set_window_id %d for surface %p\n", id, surface);
 
-	window->surface = (struct weston_surface *) surface;
+	window->surface = (tSurf *) surface;
 	window->surface_destroy_listener.notify = surface_destroy;
 	wl_signal_add(&surface->resource.destroy_signal,
 		      &window->surface_destroy_listener);
