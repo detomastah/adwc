@@ -32,7 +32,7 @@
 #include <linux/major.h>
 #include <sys/ioctl.h>
 
-#include "compositor.h"
+#include "adwc.h"
 
 struct tty {
 	struct weston_compositor *compositor;

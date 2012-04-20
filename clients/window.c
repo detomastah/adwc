@@ -317,14 +317,6 @@ display_create_egl_window_surface(struct display *display,
 
 #endif
 
-void window_get_position(struct window *window, int *x, int *y)
-{
-	if (x)
-		*x = window->x;
-	if (y)
-		*y = window->y;
-}
-
 struct wl_buffer *
 display_get_buffer_for_surface(struct display *display,
 			       cairo_surface_t *surface)
@@ -1955,6 +1947,13 @@ widget_schedule_resize(struct widget *widget, int32_t width, int32_t height)
 }
 
 static void
+handle_ping(void *data, struct wl_shell_surface *shell_surface,
+							uint32_t serial)
+{
+	wl_shell_surface_pong(shell_surface, serial);
+}
+
+static void
 handle_configure(void *data, struct wl_shell_surface *shell_surface,
 		 uint32_t edges, int32_t width, int32_t height)
 {
@@ -1992,6 +1991,7 @@ handle_popup_done(void *data, struct wl_shell_surface *shell_surface)
 }
 
 static const struct wl_shell_surface_listener shell_surface_listener = {
+	handle_ping,
 	handle_configure,
 	handle_popup_done
 };
@@ -2042,6 +2042,7 @@ idle_redraw(struct task *task, uint32_t events)
 	widget_redraw(window->widget);
 	window_flush(window);
 	window->redraw_needed = 0;
+	wl_list_init(&window->redraw_task.link);
 
 	callback = wl_surface_frame(window->surface);
 	wl_callback_add_listener(callback, &listener, window);
@@ -2175,6 +2176,23 @@ window_damage(struct window *window, int32_t x, int32_t y,
 	wl_surface_damage(window->surface, x, y, width, height);
 }
 
+static void
+surface_enter(void *data,
+	      struct wl_surface *wl_surface, struct wl_output *output)
+{
+}
+
+static void
+surface_leave(void *data,
+	      struct wl_surface *wl_surface, struct wl_output *output)
+{
+}
+
+static const struct wl_surface_listener surface_listener = {
+	surface_enter,
+	surface_leave
+};
+
 static struct window *
 window_create_internal(struct display *display, struct window *parent)
 {
@@ -2188,6 +2206,7 @@ window_create_internal(struct display *display, struct window *parent)
 	window->display = display;
 	window->parent = parent;
 	window->surface = wl_compositor_create_surface(display->compositor);
+	wl_surface_add_listener(window->surface, &surface_listener, window);
 	if (display->shell) {
 		window->shell_surface =
 			wl_shell_get_shell_surface(display->shell,
@@ -2214,6 +2233,7 @@ window_create_internal(struct display *display, struct window *parent)
 
 	wl_surface_set_user_data(window->surface, window);
 	wl_list_insert(display->window_list.prev, &window->link);
+	wl_list_init(&window->redraw_task.link);
 
 	if (window->shell_surface) {
 		wl_shell_surface_set_user_data(window->shell_surface, window);
@@ -2397,8 +2417,9 @@ window_show_menu(struct display *display,
 	window->x = x;
 	window->y = y;
 
-	wl_shell_surface_set_popup(window->shell_surface,
-				   input->input_device, time,
+	input_ungrab(input);
+	wl_shell_surface_set_popup(window->shell_surface, input->input_device,
+				   display_get_serial(window->display),
 				   window->parent->shell_surface,
 				   window->x, window->y, 0);
 

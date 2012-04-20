@@ -3388,8 +3388,7 @@ shell_configure_fullscreen(tWin *shsurf)
 }
 
 /* make the fullscreen and black surface at the top */
-static void
-shell_stack_fullscreen(tWin *shsurf)
+void			shell_stack_fullscreen				(tWin *shsurf)
 {
 	tSurf *surface = shsurf->surface;
 
@@ -3403,19 +3402,17 @@ shell_stack_fullscreen(tWin *shsurf)
 	weston_surface_damage(shsurf->fullscreen.black_surface);
 }
 
-static void
-shell_map_fullscreen(tWin *shsurf)
+void			shell_map_fullscreen				(tWin *shsurf)
 {
 	shell_configure_fullscreen(shsurf);
 	shell_stack_fullscreen(shsurf);
 }
 
-static void
-shell_surface_set_fullscreen(struct wl_client *client,
-			     struct wl_resource *resource,
-			     uint32_t method,
-			     uint32_t framerate,
-			     struct wl_resource *output_resource)
+void			shell_surface_set_fullscreen			(struct wl_client *client,
+										struct wl_resource *resource,
+										uint32_t method,
+										uint32_t framerate,
+										struct wl_resource *output_resource)
 {
 	tWin *shsurf = resource->data;
 	tSurf *es = shsurf->surface;
@@ -3445,9 +3442,7 @@ shell_surface_set_fullscreen(struct wl_client *client,
 					shsurf->output->current->height);
 }
 
-static void
-popup_grab_focus(struct wl_pointer_grab *grab,
-		 struct wl_surface *surface, int32_t x, int32_t y)
+void			popup_grab_focus					(struct wl_pointer_grab *grab, struct wl_surface *surface, int32_t x, int32_t y)
 {
 	struct wl_input_device *device = grab->input_device;
 	tWin *priv =
@@ -3463,9 +3458,7 @@ popup_grab_focus(struct wl_pointer_grab *grab,
 	}
 }
 
-static void
-popup_grab_motion(struct wl_pointer_grab *grab,
-		  uint32_t time, int32_t sx, int32_t sy)
+void			popup_grab_motion					(struct wl_pointer_grab *grab, uint32_t time, int32_t sx, int32_t sy)
 {
 	struct wl_resource *resource;
 
@@ -3474,9 +3467,7 @@ popup_grab_motion(struct wl_pointer_grab *grab,
 		wl_input_device_send_motion(resource, time, sx, sy);
 }
 
-static void
-popup_grab_button(struct wl_pointer_grab *grab,
-		  uint32_t time, uint32_t button, int32_t state)
+void			popup_grab_button					(struct wl_pointer_grab *grab, uint32_t time, uint32_t button, int32_t state)
 {
 	struct wl_resource *resource;
 	tWin *shsurf =
@@ -3508,8 +3499,7 @@ static const struct wl_pointer_grab_interface popup_grab_interface = {
 	popup_grab_button,
 };
 
-static void
-shell_map_popup(tWin *shsurf, uint32_t serial)
+void			shell_map_popup					(tWin *shsurf, uint32_t serial)
 {
 	struct wl_input_device *device;
 	tSurf *es = shsurf->surface;
@@ -3544,8 +3534,7 @@ shell_map_popup(tWin *shsurf, uint32_t serial)
 					   &shsurf->popup.grab);
 }
 
-static void
-shell_surface_set_popup(struct wl_client *client,
+void			shell_surface_set_popup(struct wl_client *client,
 			struct wl_resource *resource,
 			struct wl_resource *input_device_resource,
 			uint32_t time,
@@ -3560,7 +3549,25 @@ shell_surface_set_popup(struct wl_client *client,
 	shsurf->popup.y = y;
 }
 
+
+void			shell_surface_pong				(struct wl_client *client, struct wl_resource *resource, uint32_t serial)
+{
+	struct shell_surface *shsurf = resource->data;
+	
+/*	if (!shsurf || !shsurf->ping_timer)
+		return;
+	
+/*	if (shsurf->ping_timer->serial == serial) {
+		shsurf->ping_timer->pong_received = 1;
+		shsurf->unresponsive = 0;
+		free(shsurf->ping_timer);
+		shsurf->ping_timer = NULL;
+	}*/
+}
+
+
 static const struct wl_shell_surface_interface shell_surface_implementation = {
+	shell_surface_pong,
 	shell_surface_move,
 	shell_surface_resize,
 	shell_surface_set_toplevel,
@@ -3783,6 +3790,7 @@ desktop_shell_select_tag(struct wl_client *client,
 	}
 	shell_restack();
 }
+
 
 static const struct desktop_shell_interface desktop_shell_implementation = {
 	desktop_shell_set_background,

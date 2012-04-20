@@ -120,6 +120,8 @@ get_wm_window(tSurf *surface);
 WL_EXPORT  bool		weston_wm_window_resize			(struct weston_wm* wm, tSurf* es, int32_t x, int32_t y, int32_t width, int32_t height, bool hints)
 {
 	struct weston_wm_window* win = get_wm_window(es);
+	if (!win)
+		return win;
 	/* Real client geometry, please keep it contained to C code at the very least. */
 //	if (!c->fullscreen)
 //		geometry_internal = titlebar_geometry_remove(c->titlebar, c->border_width, geometry);
