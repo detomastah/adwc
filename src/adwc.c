@@ -2833,7 +2833,6 @@ move_grab_motion(struct wl_pointer_grab *grab,
 	struct wl_input_device *device = grab->input_device;
 	tWin *shsurf = move->base.shsurf;
 	tSurf *es;
-
 	if (!shsurf)
 		return;
 	
@@ -2846,6 +2845,8 @@ move_grab_motion(struct wl_pointer_grab *grab,
 				 device->x + move->dx,
 				 device->y + move->dy,
 				 es->geometry.width, es->geometry.height);
+	weston_surface_damage_below(es);
+	weston_compositor_schedule_repaint(gShell.pEC);
 	
 }
 
