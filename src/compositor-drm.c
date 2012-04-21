@@ -1448,8 +1448,7 @@ update_outputs(struct drm_compositor *ec, struct udev_device *drm_device)
 
 			if (disconnects & (1 << output->connector_id)) {
 				disconnects &= ~(1 << output->connector_id);
-				printf("connector %d disconnected\n",
-				       output->connector_id);
+				printf("connector %d disconnected\n", output->connector_id);
 				x_offset += output->base.current->width;
 				drm_output_destroy(&output->base);
 			}

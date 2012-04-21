@@ -120,8 +120,10 @@ get_wm_window(tSurf *surface);
 WL_EXPORT  bool		weston_wm_window_resize			(struct weston_wm* wm, tSurf* es, int32_t x, int32_t y, int32_t width, int32_t height, bool hints)
 {
 	struct weston_wm_window* win = get_wm_window(es);
+	
 	if (!win)
 		return win;
+	
 	/* Real client geometry, please keep it contained to C code at the very least. */
 //	if (!c->fullscreen)
 //		geometry_internal = titlebar_geometry_remove(c->titlebar, c->border_width, geometry);
@@ -152,8 +154,8 @@ WL_EXPORT  bool		weston_wm_window_resize			(struct weston_wm* wm, tSurf* es, int
 		* stored according to 'value_mask' */
 		uint32_t values[4];
 
-		values[0] = 0;
-		values[1] = 0;
+		values[0] = x;
+		values[1] = y;
 		values[2] = width;
 		values[3] = height;
 		
@@ -728,14 +730,14 @@ weston_wm_handle_map_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 			free(reply);
 			continue;
 		}
-		fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!! reply->type %d\n", reply->type);
+	//	fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!! reply->type %d\n", reply->type);
 		
 		p = ((char *) window + props[i].offset);
 		
 		if (reply->type == XCB_ATOM_WM_SIZE_HINTS) {
 			p = xcb_get_property_value(reply);
-			fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!!window->size_hints %lx\n", p);
-			buf_print (p, sizeof(window->size_hints));
+		//	fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!!window->size_hints %lx\n", p);
+		//	buf_print (p, sizeof(window->size_hints));
 			window->size_hints = *(typeof(window->size_hints)*)p;
 			buf_print (&window->size_hints, sizeof(window->size_hints));
 		}else {
@@ -760,7 +762,7 @@ weston_wm_handle_map_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 			break;
 		case XCB_ATOM_WM_SIZE_HINTS:
 			p = xcb_get_property_value(reply);
-			fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!!window->size_hints %lx\n", p);
+		//	fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!!window->size_hints %lx\n", p);
 			buf_print (p, sizeof(window->size_hints));
 			window->size_hints = *(typeof(window->size_hints)*)p;
 			buf_print (&window->size_hints, sizeof(window->size_hints));
@@ -799,14 +801,15 @@ weston_wm_handle_map_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 			struct wl_resource *surface_resource
 	*/
 //	window->shsurf = shell_get_shell_surface (wm->server->client, (struct wl_resource*)&gShell, 0, (struct wl_resource*)window->surface);
-	fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!!window->size_hints	%x\n	%d %d\n	%d %d\n	%d %d\n	%d %d\n	%d %d\n",
+/*	fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!!window->size_hints	%x\n	%d %d\n	%d %d\n	%d %d\n	%d %d\n	%d %d\n",
 		window->size_hints.flags,
 		window->size_hints.x, window->size_hints.y, window->size_hints.width, window->size_hints.height,
 		window->size_hints.min_width, window->size_hints.min_height,
 		window->size_hints.max_width, window->size_hints.max_height,
 		window->size_hints.base_width, window->size_hints.base_height
-	);
+	);*/
 	
+	fprintf (stderr, "aoeuhtnsoheutnaesouhtneoashutsensoauntheotunseohautnseouhsnaeo Shell_get_surface\n");
 	if (window->surface) {
 		window->shsurf = Shell_get_surface(wm->server->client, (struct wl_resource*)window->surface);
 		
@@ -837,7 +840,7 @@ weston_wm_handle_map_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 			}*/
 			int basex = 0, basey = 0;
 			
-			if (window->transient_for) {
+		/*	if (window->transient_for) {
 				if (window->transient_for->shsurf && window->transient_for->shsurf->surface) {
 					basex = window->transient_for->shsurf->surface->geometry.x;
 					basey = window->transient_for->shsurf->surface->geometry.y;
@@ -846,14 +849,14 @@ weston_wm_handle_map_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 					basey = window->transient_for->surface->geometry.y;
 				}
 				fprintf (stderr, "aoeuhtnsoheutnaesouhtneoashutsensoauntheotunseohautnseouhsnaeo %d %d\n", basex, basey);
-			}
+			}*/
 			
 			ShSurf_LSet (window->shsurf, L_eFloat);
 		//	window->shsurf->type = SHELL_SURFACE_TRANSIENT;
 			window->shsurf->type = SHELL_SURFACE_TOPLEVEL;
 			
-			if (window->size_hints.flags & XCB_ICCCM_SIZE_HINT_US_POSITION) {
-				if (window->size_hints.flags & XCB_ICCCM_SIZE_HINT_US_SIZE) {
+			if (window->size_hints.flags & XCB_ICCCM_SIZE_HINT_P_POSITION) {
+				if (window->size_hints.flags & XCB_ICCCM_SIZE_HINT_P_SIZE) {
 					weston_surface_configure(window->shsurf->surface,
 						basex + window->size_hints.x,
 						basey + window->size_hints.y,
@@ -868,19 +871,17 @@ weston_wm_handle_map_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 				}
 			}
 		}else {
-			window->shsurf->type = SHELL_SURFACE_TOPLEVEL;
+		/*	window->shsurf->type = SHELL_SURFACE_TOPLEVEL;
 			
 			weston_surface_configure(window->shsurf->surface,
 				window->size_hints.x,
 				window->size_hints.y,
 				window->size_hints.width,
 				window->size_hints.height
-			);
-		//	shell_surface_set_toplevel (wm->server->client, (struct wl_resource*)window->shsurf);
+			);*/
+			shell_surface_set_toplevel (wm->server->client, (struct wl_resource*)window->shsurf);
 		}
 	}
-//	tSurf *surface = surface_resource->data;
-//	struct shell_surface *shsurf;
 	
 	
 	fprintf(stderr, "window %d: name %s, class %s, transient_for %d\n",
@@ -1253,6 +1254,7 @@ weston_wm_handle_create_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 static void
 weston_wm_handle_destroy_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 {
+	fprintf(stderr, "weston_wm_handle_destroy_notify\n");
 	xcb_destroy_notify_event_t *destroy_notify =
 		(xcb_destroy_notify_event_t *) event;
 	struct weston_wm_window *window;
@@ -1272,6 +1274,7 @@ weston_wm_handle_destroy_notify(struct weston_wm *wm, xcb_generic_event_t *event
 	if (window->surface)
 		wl_list_remove(&window->surface_destroy_listener.link);
 	free(window);
+	fprintf(stderr, "weston_wm_handle_destroy_notify exit\n");
 }
 
 
@@ -1761,8 +1764,7 @@ get_wm_window(tSurf *surface)
 
 	listener = wl_signal_get(&resource->destroy_signal, surface_destroy);
 	if (listener)
-		return container_of(listener, struct weston_wm_window,
-				    surface_destroy_listener);
+		return container_of(listener, struct weston_wm_window, surface_destroy_listener);
 
 	return NULL;
 }
@@ -1770,6 +1772,7 @@ get_wm_window(tSurf *surface)
 static void
 xserver_set_window_id(struct wl_client *client, struct wl_resource *resource, struct wl_resource *surface_resource, uint32_t id)
 {
+	fprintf(stderr, "xserver_set_window_id\n");
 	struct weston_xserver *wxs = resource->data;
 	struct weston_wm *wm = wxs->wm;
 	struct wl_surface *surface = surface_resource->data;
@@ -1792,6 +1795,7 @@ xserver_set_window_id(struct wl_client *client, struct wl_resource *resource, st
 	window->surface = (tSurf *) surface;
 	window->surface_destroy_listener.notify = surface_destroy;
 	wl_signal_add(&surface->resource.destroy_signal, &window->surface_destroy_listener);
+	fprintf(stderr, "xserver_set_window_id leave\n");
 }
 
 static const struct xserver_interface xserver_implementation = {

@@ -481,7 +481,7 @@ WL_EXPORT int		weston_surface_is_mapped			(tSurf *surface)
 
 
 
-tSurf*	weston_compositor_pick_surface		(tComp *compositor, int32_t x, int32_t y, int32_t *sx, int32_t *sy)
+tSurf*			weston_compositor_pick_surface		(tComp *compositor, int32_t x, int32_t y, int32_t *sx, int32_t *sy)
 {
 //	dTrace_E("");
 	tSurf *surface;
@@ -5089,7 +5089,7 @@ void layout(tOutput* output)
 	mh = output->height - 32;
 	mx = output->x;
 	my = output->y + 32;
-	printf("mw:%d mh:%d mx:%d my:%d\n", mw, mh, mx, my);
+//	printf("mw:%d mh:%d mx:%d my:%d\n", mw, mh, mx, my);
 	
 	n = wl_list_length(&output->surfaces);
 	if(n == 0)
@@ -5161,26 +5161,26 @@ void layout(tOutput* output)
 void shell_restack()
 {
 //	return;
-	dTrace_E("");
+//	dTrace_E("");
 	
 	tOutput *output, *tmp_output;
 	tSurf* es;
 	tWin *shsurf;
 	
-	shell_L_print (&gShell);
+//	shell_L_print (&gShell);
 	
 	wl_list_for_each(output, &gShell.pEC->output_list, link) {
-		printf("\noutput TAG: %lx\n", output->Tags);
+	/*	printf("\noutput TAG: %lx\n", output->Tags);
 		printf("xy %d %d	wh %d %d\n",
 			output->region.extents.x1,
 			output->region.extents.y1,
 			output->region.extents.x2,
 			output->region.extents.y2
-		);
+		);*/
 	//	printf("mw:%d mh:%d mx:%d my:%d\n", output->mm_width, output->mm_height, output->x, output->y);
 		wl_list_init(&output->surfaces);
 	}
-	printf("\n");
+//	printf("\n");
 	
 	wl_list_init(&gShell.pEC->surface_list);
 	
@@ -5223,7 +5223,7 @@ void shell_restack()
 	}
 	
 //	weston_compositor_damage_all(gShell.pEC);
-	dTrace_L("");
+//	dTrace_L("");
 }
 
 static void
