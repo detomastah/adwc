@@ -24,7 +24,6 @@
 #ifndef _WAYLAND_SYSTEM_COMPOSITOR_H_
 #define _WAYLAND_SYSTEM_COMPOSITOR_H_
 
-#include <libudev.h>
 #include <pixman.h>
 #include <wayland-server.h>
 
@@ -35,6 +34,8 @@
 
 #include "matrix.h"
 #include "../shared/config-parser.h"
+//#include "weston-egl-ext.h"
+
 
 struct weston_transform {
 	struct weston_matrix matrix;
@@ -42,13 +43,24 @@ struct weston_transform {
 };
 
 struct weston_surface;
+struct shell_surface;
 struct weston_input_device;
+struct weston_output;
 
 struct weston_mode {
 	uint32_t flags;
 	int32_t width, height;
 	uint32_t refresh;
 	struct wl_list link;
+};
+
+struct weston_shell_interface {
+	void *shell;			/* either desktop or tablet */
+
+	void (*create_shell_surface)(void *shell,
+				     struct weston_surface *surface,
+				     struct shell_surface **ret);
+	void (*set_toplevel)(struct shell_surface *shsurf);
 };
 
 struct weston_border {
@@ -71,8 +83,19 @@ enum dpms_enum {
 	WESTON_DPMS_OFF
 };
 
-struct weston_output {
+struct weston_read_pixels {
+	void *data;
+	int x, y, width, height;
+	void (*done)(struct weston_read_pixels *read_pixels,
+		     struct weston_output *output);
 	struct wl_list link;
+};
+
+struct weston_output {
+	uint32_t id;
+
+	struct wl_list link;
+	struct wl_list resource_list;
 	struct wl_global *global;
 	struct weston_compositor *compositor;
 	struct weston_matrix matrix;
@@ -86,18 +109,20 @@ struct weston_output {
 	int repaint_scheduled;
 	struct weston_output_zoom zoom;
 	int dirty;
+	struct wl_list read_pixels_list;
 
 	char *make, *model;
 	uint32_t subpixel;
 	
 	struct weston_mode *current;
+	struct weston_mode *origin;
 	struct wl_list mode_list;
 
 	void (*repaint)(struct weston_output *output,
 			pixman_region32_t *damage);
 	void (*destroy)(struct weston_output *output);
 	void (*assign_planes)(struct weston_output *output);
-	void (*read_pixels)(struct weston_output *output, void *data);
+	int (*switch_mode)(struct weston_output *output, struct weston_mode *mode);
 
 	/* backlight values are on 0-255 range, where higher is brighter */
 	uint32_t backlight_current;
@@ -133,17 +158,18 @@ struct weston_shader {
 	GLint proj_uniform;
 	GLint tex_uniform;
 	GLint alpha_uniform;
+	GLint brightness_uniform;
+	GLint saturation_uniform;
 	GLint color_uniform;
 	GLint texwidth_uniform;
 };
 
-/*
 struct weston_animation {
-//	void (*frame)(struct weston_animation *animation,
-//		      struct weston_output *output, uint32_t msecs);
-//	struct wl_list link;
-};/**/
-/*
+	void (*frame)(struct weston_animation *animation,
+		      struct weston_output *output, uint32_t msecs);
+	struct wl_list link;
+};
+
 struct weston_spring {
 	double k;
 	double friction;
@@ -151,7 +177,7 @@ struct weston_spring {
 	double target;
 	double previous;
 	uint32_t timestamp;
-};*/
+};
 
 enum {
 	WESTON_COMPOSITOR_ACTIVE,
@@ -178,6 +204,7 @@ struct weston_compositor {
 	struct weston_shader solid_shader;
 	struct weston_shader *current_shader;
 	struct wl_display *wl_display;
+	struct weston_shell_interface shell_interface;
 
 	struct wl_signal activate_signal;
 	struct wl_signal lock_signal;
@@ -190,21 +217,19 @@ struct weston_compositor {
 	struct wl_input_device *input_device;
 
 	struct weston_layer fade_layer;
-	struct weston_layer cursor_layer;	//shell attaches its layers to this?
+	struct weston_layer cursor_layer;
 
 	struct wl_list output_list;
 	struct wl_list input_device_list;
 	struct wl_list layer_list;
-	
-	struct wl_list surface_list;	//list of what the backend draws?
-	
+	struct wl_list surface_list;
 	struct wl_list binding_list;
-/*	struct wl_list animation_list;
+	struct wl_list animation_list;
 	struct {
 		struct weston_spring spring;
 		struct weston_animation animation;
 		struct weston_surface *surface;
-	} fade;*/
+	} fade;
 
 	uint32_t state;
 	struct wl_event_source *idle_source;
@@ -223,6 +248,10 @@ struct weston_compositor {
 	PFNGLEGLIMAGETARGETTEXTURE2DOESPROC image_target_texture_2d;
 	PFNEGLCREATEIMAGEKHRPROC create_image;
 	PFNEGLDESTROYIMAGEKHRPROC destroy_image;
+
+	int has_unpack_subimage;
+	GLenum read_format;
+
 	PFNEGLBINDWAYLANDDISPLAYWL bind_display;
 	PFNEGLUNBINDWAYLANDDISPLAYWL unbind_display;
 	int has_bind_display;
@@ -230,8 +259,12 @@ struct weston_compositor {
 	void (*destroy)(struct weston_compositor *ec);
 	int (*authenticate)(struct weston_compositor *c, uint32_t id);
 
+	void (*ping_handler)(struct weston_surface *surface, uint32_t serial);
+
 	struct screenshooter *screenshooter;
 	int launcher_sock;
+
+	uint32_t output_id_pool;
 };
 
 #define MODIFIER_CTRL	(1 << 8)
@@ -286,17 +319,19 @@ struct weston_surface {
 	struct weston_shader *shader;
 	GLfloat color[4];
 	uint32_t alpha;
+	uint32_t brightness;
+	uint32_t saturation;
 
 	/* Surface geometry state, mutable.
 	 * If you change anything, set dirty = 1.
 	 * That includes the transformations referenced from the list.
 	 */
 	struct {
-		int32_t x, y; /* surface translation on display */
+		GLfloat x, y; /* surface translation on display */
 		int32_t width, height;
 
 		/* struct weston_transform */
-	//	struct wl_list transformation_list;
+		struct wl_list transformation_list;
 
 		int dirty;
 	} geometry;
@@ -304,16 +339,19 @@ struct weston_surface {
 	/* State derived from geometry state, read-only.
 	 * This is updated by weston_surface_update_transform().
 	 */
-/*	struct {
+	struct {
 		pixman_region32_t boundingbox;
 		pixman_region32_t opaque;
 
+		/* matrix and inverse are used only if enabled = 1.
+		 * If enabled = 0, use x, y, width, height directly.
+		 */
 		int enabled;
 		struct weston_matrix matrix;
 		struct weston_matrix inverse;
 
-		struct weston_transform position;
-	} transform;*/
+		struct weston_transform position; /* matrix from x, y */
+	} transform;
 
 	/*
 	 * Which output to vsync this surface to.
@@ -321,6 +359,12 @@ struct weston_surface {
 	 * Must be NULL, if 'link' is not in weston_compositor::surface_list.
 	 */
 	struct weston_output *output;
+
+	/*
+	 * A more complete representation of all outputs this surface is
+	 * displayed on.
+	 */
+	uint32_t output_mask;
 
 	struct wl_list frame_callback_list;
 
@@ -351,7 +395,7 @@ weston_surface_to_global_float(struct weston_surface *surface,
 void
 weston_surface_from_global(struct weston_surface *surface,
 			   int32_t x, int32_t y, int32_t *sx, int32_t *sy);
-/*
+
 void
 weston_spring_init(struct weston_spring *spring,
 		   double k, double current, double target);
@@ -359,7 +403,7 @@ void
 weston_spring_update(struct weston_spring *spring, uint32_t msec);
 int
 weston_spring_done(struct weston_spring *spring);
-*/
+
 void
 weston_surface_activate(struct weston_surface *surface,
 			struct weston_input_device *device);
@@ -399,6 +443,8 @@ void
 weston_output_finish_frame(struct weston_output *output, int msecs);
 void
 weston_output_damage(struct weston_output *output);
+void
+weston_output_do_read_pixels(struct weston_output *output);
 void
 weston_compositor_repick(struct weston_compositor *compositor);
 void
@@ -540,14 +586,14 @@ weston_watch_process(struct weston_process *process);
 
 int
 weston_xserver_init(struct weston_compositor *compositor);
-/*
+
 struct weston_zoom;
 typedef	void (*weston_zoom_done_func_t)(struct weston_zoom *zoom, void *data);
 
 struct weston_zoom *
 weston_zoom_run(struct weston_surface *surface, GLfloat start, GLfloat stop,
 		weston_zoom_done_func_t done, void *data);
-*/
+
 void
 weston_surface_set_color(struct weston_surface *surface,
 			 GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha);
@@ -557,5 +603,8 @@ weston_surface_destroy(struct weston_surface *surface);
 
 struct weston_compositor *
 backend_init(struct wl_display *display, int argc, char *argv[]);
+
+int
+weston_output_switch_mode(struct weston_output *output, struct weston_mode *mode);
 
 #endif

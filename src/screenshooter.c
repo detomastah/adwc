@@ -63,7 +63,7 @@ screenshooter_shoot(struct wl_client *client,
 	}
 
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
-	output->read_pixels(output, tmp);
+//	output->read_pixels(output, tmp);
 
 	d = wl_shm_buffer_get_data(buffer) + output->y * buffer_stride +
 							output->x * 4;

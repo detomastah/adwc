@@ -96,6 +96,16 @@ struct weston_mode {
 	struct wl_list link;
 };
 
+struct weston_shell_interface {
+	void *shell;			/* either desktop or tablet */
+
+	void (*create_shell_surface)(void *shell,
+				     struct weston_surface *surface,
+				     struct shell_surface **ret);
+	void (*set_toplevel)(struct shell_surface *shsurf);
+};
+
+
 struct weston_border {
 	int32_t left, right, top, bottom;
 };
@@ -235,6 +245,7 @@ struct weston_compositor
 	struct weston_shader *current_shader;
 	
 	struct wl_display *wl_display;
+	struct weston_shell_interface shell_interface;
 	
 	struct wl_signal activate_signal;
 	struct wl_signal lock_signal;
@@ -505,7 +516,7 @@ typedef struct {
 }tADWC_Binding;
 
 
-
+/*
 struct xserver {
 	struct wl_resource resource;
 };
@@ -527,7 +538,7 @@ struct weston_xserver {
 	struct wl_listener activate_listener;
 	struct wl_listener destroy_listener;
 };
-
+*/
 
 
 
@@ -719,8 +730,7 @@ weston_watch_process(struct weston_process *process);
 
 
 bool		weston_wm_window_resize			(struct weston_wm* wm, tSurf* es, int32_t x, int32_t y, int32_t width, int32_t height, bool hints);
-void*
-weston_xserver_init(tComp *compositor);
+//void*		weston_xserver_init		(tComp *compositor);
 /*
 struct weston_zoom;
 typedef	void (*weston_zoom_done_func_t)(struct weston_zoom *zoom, void *data);
