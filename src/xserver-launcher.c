@@ -851,7 +851,7 @@ weston_wm_handle_map_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 				fprintf (stderr, "aoeuhtnsoheutnaesouhtneoashutsensoauntheotunseohautnseouhsnaeo %d %d\n", basex, basey);
 			}*/
 			
-			ShSurf_LSet (window->shsurf, L_eFloat);
+			Win_LSet (window->shsurf, L_eFloat);
 		//	window->shsurf->type = SHELL_SURFACE_TRANSIENT;
 			window->shsurf->type = SHELL_SURFACE_TOPLEVEL;
 			

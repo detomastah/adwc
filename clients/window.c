@@ -1967,6 +1967,13 @@ handle_configure(void *data, struct wl_shell_surface *shell_surface,
 }
 
 static void
+handle_position(void *data, struct wl_shell_surface *shell_surface, int32_t x, int32_t y)
+{
+	
+}
+
+
+static void
 menu_destroy(struct menu *menu)
 {
 	widget_destroy(menu->widget);
@@ -1993,7 +2000,8 @@ handle_popup_done(void *data, struct wl_shell_surface *shell_surface)
 static const struct wl_shell_surface_listener shell_surface_listener = {
 	handle_ping,
 	handle_configure,
-	handle_popup_done
+	handle_popup_done,
+	handle_position,
 };
 
 void

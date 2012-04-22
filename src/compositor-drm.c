@@ -769,9 +769,13 @@ drm_output_set_cursor(struct weston_output *output_base, struct weston_input_dev
 		goto out;
 	}
 	{
-		int32_t x = eid->sprite->geometry.x, y = eid->sprite->geometry.y;
+	//	int32_t x = eid->sprite->geometry.x, y = eid->sprite->geometry.y;
+		int32_t x = eid->sprite->geometry.x + eid->hotspot_x, y = eid->sprite->geometry.y + eid->hotspot_y;
 		Output_Focus_CurPosGet (output, eid, &x, &y);
-		
+		if (output_base->Rotation == Output_Rotation_eLeft) {
+		//	y -= eid->sprite->geometry.width - eid->hotspot_x;
+			y -= 64;
+		}
 		ret = drmModeMoveCursor(c->drm.fd, output->crtc_id,
 					x,
 					y);

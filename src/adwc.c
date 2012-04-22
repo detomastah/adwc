@@ -2739,8 +2739,8 @@ int main(int argc, char *argv[])
 //					   "weston_xserver_init",
 //					   &xserver_module);
 	xserver_init = weston_xserver_init;
-	if (xserver_init)
-		gpXServer = xserver_init(ec);
+//	if (xserver_init)
+//		gpXServer = xserver_init(ec);
 
 	if (wl_display_add_socket(display, socket_name)) {
 		fprintf(stderr, "failed to add socket: %m\n");
@@ -2836,7 +2836,7 @@ move_grab_motion(struct wl_pointer_grab *grab,
 	if (!shsurf)
 		return;
 	
-	ShSurf_LSet (shsurf, L_eFloat);
+	Win_LSet (shsurf, L_eFloat);
 	L_ShellToTop (shsurf);
 	
 	es = shsurf->surface;
@@ -2845,6 +2845,9 @@ move_grab_motion(struct wl_pointer_grab *grab,
 				 device->x + move->dx,
 				 device->y + move->dy,
 				 es->geometry.width, es->geometry.height);
+	
+	wl_shell_surface_send_position(&move->base.shsurf->resource, device->x + move->dx, device->y + move->dy);
+	
 	weston_surface_damage_below(es);
 	weston_compositor_schedule_repaint(gShell.pEC);
 	
@@ -2933,7 +2936,7 @@ resize_grab_motion(struct wl_pointer_grab *grab,
 	if (!resize->base.shsurf)
 		return;
 
-	ShSurf_LSet (resize->base.shsurf, L_eFloat);
+	Win_LSet (resize->base.shsurf, L_eFloat);
 	
 	weston_surface_from_global(resize->base.shsurf->surface,
 				   device->grab_x, device->grab_y,
@@ -2956,15 +2959,15 @@ resize_grab_motion(struct wl_pointer_grab *grab,
 	} else {
 		height = resize->height;
 	}
-	if (resize->base.shsurf->surface->client == gpXServer->client) {
-		weston_wm_window_resize (gpXServer->wm, resize->base.shsurf->surface,
-			resize->base.shsurf->surface->geometry.x,
-			resize->base.shsurf->surface->geometry.y,
-			width, height, 0);
-	}else {
+//	if (resize->base.shsurf->surface->client == gpXServer->client) {
+//		weston_wm_window_resize (gpXServer->wm, resize->base.shsurf->surface,
+//			resize->base.shsurf->surface->geometry.x,
+//			resize->base.shsurf->surface->geometry.y,
+//			width, height, 0);
+//	}else {
 		wl_shell_surface_send_configure(&resize->base.shsurf->resource,
 						resize->edges, width, height);
-	}
+//	}
 }
 
 static void
@@ -3251,20 +3254,32 @@ void			shell_surface_set_transient			(struct wl_client *client,
 										struct wl_resource *parent_resource,
 										int x, int y, uint32_t flags)
 {
-	tWin *shsurf = resource->data;
-	tSurf *es = shsurf->surface;
-	tWin *pshsurf = parent_resource->data;
-	tSurf *pes = pshsurf->surface;
-
-	if (reset_shell_surface_type(shsurf))
+	tWin *pwin = resource->data;
+	
+	if (reset_shell_surface_type(pwin))
 		return;
-
-	/* assign to parents output */
-	shsurf->output = pes->output;
- 	weston_surface_set_position(es, pes->geometry.x + x,
-					pes->geometry.y + y);
-
-	shsurf->type = SHELL_SURFACE_TRANSIENT;
+	
+	printf ("xy %d %d\n", x, y);
+	if (parent_resource && parent_resource->data) {
+		tWin *pshsurf = parent_resource->data;
+		tSurf *pes = pshsurf->surface;
+		
+		printf ("local for %d %d\n", pes->geometry.x, pes->geometry.y);
+		/* assign to parents output */
+		pwin->output = pes->output;
+		Win_LSet (pwin, L_eFloat);
+		weston_surface_set_position(pwin->surface, pes->geometry.x + x, pes->geometry.y + y);
+		
+		pwin->type = SHELL_SURFACE_TOPLEVEL;
+	}else {
+		printf ("global transient\n");
+		
+		Win_LSet (pwin, L_eFloat);
+		
+		weston_surface_set_position(pwin->surface, x, y);
+		pwin->type = SHELL_SURFACE_TOPLEVEL;
+	//	shell_restack ();
+	}
 }
 
 
@@ -3866,7 +3881,7 @@ resize_binding(struct wl_input_device *device, uint32_t time,
 			break;
 	}
 	
-//	ShSurf_LSet (shsurf, L_eFloat);
+//	Win_LSet (shsurf, L_eFloat);
 	
 	weston_surface_from_global(surface,
 				   device->grab_x, device->grab_y, &x, &y);
@@ -4180,25 +4195,6 @@ void		activate			(struct wl_shell *shell, tSurf *es, tFocus *device)
 	}
 }
 
-void		shell_L_print		(struct wl_shell *shell)
-{
-	puts("Printing all shell surfaces");
-	tWin *shsurf;
-	int i;
-	for (i=0; i<L_NUM; i++) {
-		wl_list_for_each(shsurf, &gShell.L[i], L_link) {
-			printf("%d: %d %d %d %d %x\n", 
-				i,
-				shsurf->surface->geometry.x,
-				shsurf->surface->geometry.y,
-				shsurf->surface->geometry.width,
-				shsurf->surface->geometry.height,
-				shsurf->Tags
-			);
-		}
-	}
-}
-
 
 void		map			(struct wl_shell *shell, tSurf *surface, int32_t width, int32_t height, int32_t sx, int32_t sy)
 {
@@ -4333,7 +4329,7 @@ void		configure		(struct wl_shell *shell, tSurf *surface, GLfloat x, GLfloat y, 
 	surface->geometry.width = width;
 	surface->geometry.height = height;
 	surface->geometry.dirty = 1;
-
+	
 	switch (surface_type) {
 	case SHELL_SURFACE_SCREENSAVER:
 		center_on_output(surface, shsurf->fullscreen_output);
@@ -4998,16 +4994,16 @@ Output_PanelGet		(tOutput *output)
 
 
 
-/** *********************************** Shell_Surf ************************************ **/
+/** *********************************** Win ************************************ **/
 
-void		ShSurf_LSet		(tWin* shsurf, uint8_t l)
+void		Win_LSet		(tWin* shsurf, uint8_t l)
 {
 	if (l == shsurf->L)
 		return;
 	wl_list_remove (&shsurf->L_link);
 	shsurf->L = l;
 	wl_list_insert(gShell.L[shsurf->L].prev, &shsurf->L_link);
-        shell_restack();
+	shell_restack();
 }
 
 
@@ -5033,8 +5029,8 @@ static void		Act_Client_Unfloat	(struct wl_input_device *device, uint32_t time, 
 	if (!surf)
 		return;
 	tWin* shsurf = get_shell_surface(surf);
-        if(surf)
-          ShSurf_LSet(shsurf, L_eNorm);
+	if(surf)
+		Win_LSet(shsurf, L_eNorm);
 }
 
 static void		Act_Output_TagSet		(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
@@ -5075,6 +5071,26 @@ static void		Act_Surf_Teleport		(struct wl_input_device *device, uint32_t time, 
 
 
 /** *********************************** shell main ************************************ **/
+
+void		shell_L_print		(struct wl_shell *shell)
+{
+	puts("Printing all shell surfaces");
+	tWin *shsurf;
+	int i;
+	for (i=0; i<L_NUM; i++) {
+		wl_list_for_each(shsurf, &gShell.L[i], L_link) {
+			printf("%d: %d %d %d %d %x\n", 
+				i,
+				shsurf->surface->geometry.x,
+				shsurf->surface->geometry.y,
+				shsurf->surface->geometry.width,
+				shsurf->surface->geometry.height,
+				shsurf->Tags
+			);
+		}
+	}
+}
+
 
 void layout(tOutput* output)
 {
@@ -5140,14 +5156,15 @@ void layout(tOutput* output)
 			es->geometry_ours.width = cw + esml + esmr;
 			es->geometry_ours.height = ch + esmt + esmb;
 			
-			if (es->client == gpXServer->client) {
-				weston_surface_configure(es, cx - esml, cy - esmt, es->geometry.width, es->geometry.height);
+		//	if (es->client == gpXServer->client) {
+		//		weston_surface_configure(es, cx - esml, cy - esmt, es->geometry.width, es->geometry.height);
 			//	printf ("HAUHTEONSUHETONSUHTENSOUHTEOTNSUHEOTNSUHTEOSUHTNSEOU\n");
-				weston_wm_window_resize (gpXServer->wm, es, cx - esml, cy - esmt, cw + esml + esmr, ch + esmt + esmb, 0);
-			}else {
+		//		weston_wm_window_resize (gpXServer->wm, es, cx - esml, cy - esmt, cw + esml + esmr, ch + esmt + esmb, 0);
+		//	}else {
 				weston_surface_configure(es, cx - esml, cy - esmt, cw + esml + esmr, ch + esmt + esmb);
 				wl_shell_surface_send_configure(&c->resource, 0, cw + esml + esmr, ch + esmt + esmb);
-			}
+				wl_shell_surface_send_position(&c->resource, cx - esml, cy - esmt);
+		//	}
 			weston_surface_assign_output (es);
 		}
 		rn++;
@@ -5223,7 +5240,7 @@ void shell_restack()
 		layout(output);
 	}
 	
-//	weston_compositor_damage_all(gShell.pEC);
+	weston_compositor_damage_all(gShell.pEC);
 //	dTrace_L("");
 }
 

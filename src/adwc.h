@@ -759,7 +759,7 @@ Shell_get_surface(struct wl_client *client, tSurf *surface);
 
 tOutput*	CurrentOutput	();
 
-void	ShSurf_LSet		(tWin* shsurf, uint8_t l);
+void	Win_LSet		(tWin* shsurf, uint8_t l);
 
 #endif
 
