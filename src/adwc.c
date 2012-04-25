@@ -278,7 +278,6 @@ WL_EXPORT uint32_t	weston_compositor_get_time			(void)
 
 
 tWin *			get_shell_surface			(tSurf *surface);
-void			surface_compute_bbox			(tSurf *surface, int32_t sx, int32_t sy, int32_t width, int32_t height, pixman_region32_t *bbox);
 
 static void		handle_drag_surface_destroy		(struct wl_listener *listener, void *data);
 static void		device_handle_new_drag_icon		(struct wl_listener *listener, void *data);
@@ -291,7 +290,7 @@ static void		device_handle_new_drag_icon		(struct wl_listener *listener, void *d
 
 
 
-WL_EXPORT tSurf*		weston_surface_create			(tComp *compositor)
+WL_EXPORT tSurf*		weston_surface_create			()
 {
 	dTrace_E("");
 	tSurf *surface;
@@ -338,55 +337,20 @@ WL_EXPORT void		weston_surface_set_color			(tSurf *surface, GLfloat red, GLfloat
 
 WL_EXPORT void		weston_surface_damage_below		(tSurf *surface)
 {
-	tComp *compositor = gShell.pEC;
 	pixman_region32_t damage;
 
 	pixman_region32_init(&damage);
 	
 	pixman_region32_t boundingbox;
 	pixman_region32_init_rect(&boundingbox,
-						surface->geometry.x,
-						surface->geometry.y,
-						surface->geometry.width,
-						surface->geometry.height);
+				surface->geometry.x,
+				surface->geometry.y,
+				surface->geometry.width,
+				surface->geometry.height);
 	
-	pixman_region32_subtract(&damage, &boundingbox,
-				 &surface->clip);
-	pixman_region32_union(&compositor->damage,
-			      &compositor->damage, &damage);
+	pixman_region32_subtract(&damage, &boundingbox, &surface->clip);
+	pixman_region32_union(&gShell.pEC->damage, &gShell.pEC->damage, &damage);
 	pixman_region32_fini(&damage);
-}
-
-void			surface_compute_bbox			(tSurf *surface, int32_t sx, int32_t sy, int32_t width, int32_t height, pixman_region32_t *bbox)
-{
-	GLfloat min_x = HUGE_VALF,  min_y = HUGE_VALF;
-	GLfloat max_x = -HUGE_VALF, max_y = -HUGE_VALF;
-	int32_t s[4][2] = {
-		{ sx,         sy },
-		{ sx,         sy + height },
-		{ sx + width, sy },
-		{ sx + width, sy + height }
-	};
-	GLfloat int_x, int_y;
-	int i;
-
-	for (i = 0; i < 4; ++i) {
-		int32_t x, y;
-		weston_surface_to_global (surface, s[i][0], s[i][1], &x, &y);
-		if (x < min_x)
-			min_x = x;
-		if (x > max_x)
-			max_x = x;
-		if (y < min_y)
-			min_y = y;
-		if (y > max_y)
-			max_y = y;
-	}
-	
-	int_x = floorf(min_x);
-	int_y = floorf(min_y);
-	pixman_region32_init_rect(bbox, int_x, int_y,
-				  ceilf(max_x) - int_x, ceilf(max_y) - int_y);
 }
 
 WL_EXPORT void		weston_surface_update_transform		(tSurf *surface)
@@ -576,7 +540,6 @@ void			destroy_surface				(struct wl_resource *resource)
 		compositor->destroy_image(compositor->display,
 					  surface->image);
 
-//	pixman_region32_fini(&surface->transform.boundingbox);
 	pixman_region32_fini(&surface->damage);
 	pixman_region32_fini(&surface->opaque);
 	pixman_region32_fini(&surface->clip);
@@ -610,18 +573,16 @@ static void		weston_surface_attach			(struct wl_surface *surface, struct wl_buff
 			weston_surface_unmap(es);
 		return;
 	}
-
+	
 	buffer->busy_count++;
-	wl_signal_add(&es->buffer->resource.destroy_signal,
-		      &es->buffer_destroy_listener);
-
-	if (es->geometry.width != buffer->width ||
-	    es->geometry.height != buffer->height) {
+	wl_signal_add(&es->buffer->resource.destroy_signal, &es->buffer_destroy_listener);
+	
+	if (es->geometry.width != buffer->width || es->geometry.height != buffer->height) {
 		undef_region(&es->input);
 		pixman_region32_fini(&es->opaque);
 		pixman_region32_init(&es->opaque);
 	}
-
+	
 	if (!es->texture) {
 		glGenTextures(1, &es->texture);
 		glBindTexture(GL_TEXTURE_2D, es->texture);
@@ -630,31 +591,31 @@ static void		weston_surface_attach			(struct wl_surface *surface, struct wl_buff
 		glTexParameteri(GL_TEXTURE_2D,
 				GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		es->shader = &ec->texture_shader;
-	} else {
+	}else {
 		glBindTexture(GL_TEXTURE_2D, es->texture);
 	}
-
+	
 	if (wl_buffer_is_shm(buffer)) {
 		printf ("is shm\n");
 		es->pitch = wl_shm_buffer_get_stride(buffer) / 4;
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_BGRA_EXT,
-			     es->pitch, es->buffer->height, 0,
-			     GL_BGRA_EXT, GL_UNSIGNED_BYTE, NULL);
-	} else {
+			es->pitch, es->buffer->height, 0,
+			GL_BGRA_EXT, GL_UNSIGNED_BYTE, NULL);
+	}else {
 		printf ("is NOT shm\n");
 		if (es->image != EGL_NO_IMAGE_KHR)
 			ec->destroy_image(ec->display, es->image);
 		es->image = ec->create_image(ec->display, NULL,
-					     EGL_WAYLAND_BUFFER_WL,
-					     buffer, NULL);
-
+					EGL_WAYLAND_BUFFER_WL,
+					buffer, NULL);
+		
 		ec->image_target_texture_2d(GL_TEXTURE_2D, es->image);
-
+		
 		es->pitch = buffer->width;
 	}
 }
 
-static int		texture_region				(tSurf *es, pixman_region32_t *region)
+static int		texture_region_norm			(tSurf *es, pixman_region32_t *region)
 {
 	tComp *ec = gShell.pEC;
 	GLfloat *v, inv_width, inv_height;
@@ -662,13 +623,13 @@ static int		texture_region				(tSurf *es, pixman_region32_t *region)
 	pixman_box32_t *rectangles;
 	unsigned int *p;
 	int i, n;
-
+	
 	rectangles = pixman_region32_rectangles(region, &n);
 	v = wl_array_add(&ec->vertices, n * 16 * sizeof *v);
 	p = wl_array_add(&ec->indices, n * 6 * sizeof *p);
 	inv_width = 1.0 / es->pitch;
 	inv_height = 1.0 / es->geometry.height;
-
+	
 	for (i = 0; i < n; i++, v += 16, p += 6) {
 		weston_surface_from_global (es, rectangles[i].x1,
 					  rectangles[i].y1, &sx, &sy);
@@ -676,28 +637,28 @@ static int		texture_region				(tSurf *es, pixman_region32_t *region)
 		v[ 1] = rectangles[i].y1;
 		v[ 2] = sx * inv_width;
 		v[ 3] = sy * inv_height;
-
+		
 		weston_surface_from_global (es, rectangles[i].x1,
 					  rectangles[i].y2, &sx, &sy);
 		v[ 4] = rectangles[i].x1;
 		v[ 5] = rectangles[i].y2;
 		v[ 6] = sx * inv_width;
 		v[ 7] = sy * inv_height;
-
+		
 		weston_surface_from_global (es, rectangles[i].x2,
 					  rectangles[i].y1, &sx, &sy);
 		v[ 8] = rectangles[i].x2;
 		v[ 9] = rectangles[i].y1;
 		v[10] = sx * inv_width;
 		v[11] = sy * inv_height;
-
+		
 		weston_surface_from_global (es, rectangles[i].x2,
 					  rectangles[i].y2, &sx, &sy);
 		v[12] = rectangles[i].x2;
 		v[13] = rectangles[i].y2;
 		v[14] = sx * inv_width;
 		v[15] = sy * inv_height;
-
+		
 		p[0] = i * 4 + 0;
 		p[1] = i * 4 + 1;
 		p[2] = i * 4 + 2;
@@ -724,7 +685,7 @@ static int		texture_region_left			(tOutput *pout, tSurf *es, pixman_region32_t *
 	p = wl_array_add(&ec->indices, n * 6 * sizeof *p);
 	inv_width = 1.0 / es->pitch;
 	inv_height = 1.0 / es->geometry.height;
-
+	
 	for (i = 0; i < n; i++, v += 16, p += 6) {
 		if (i == 0)
 			printf ("\nb:	%d %d %d %d\n", rectangles[i].x1, rectangles[i].y1, rectangles[i].x2, rectangles[i].y2);
@@ -754,12 +715,18 @@ static int		texture_region_left			(tOutput *pout, tSurf *es, pixman_region32_t *
 		p[4] = i * 4 + 1;
 		p[5] = i * 4 + 3;
 	}
-
 	return n;
 }
 
+static int		texture_region				(tOutput *pout, tSurf *es, pixman_region32_t *region)
+{
+	switch (pout->Rotation) {
+	case Output_Rotation_eNorm:	return texture_region_norm (es, region);
+	case Output_Rotation_eLeft:	return texture_region_left (pout, es, region);
+	}
+}
 
-WL_EXPORT void		weston_surface_draw_norm			(tSurf *es, tOutput *output, pixman_region32_t *damage)
+WL_EXPORT void		weston_surface_draw			(tSurf *es, tOutput *output, pixman_region32_t *damage)
 {
 	tComp *ec = gShell.pEC;
 	GLfloat *v;
@@ -771,10 +738,10 @@ WL_EXPORT void		weston_surface_draw_norm			(tSurf *es, tOutput *output, pixman_r
 	
 	pixman_region32_t boundingbox;
 	pixman_region32_init_rect(&boundingbox,
-					  es->geometry.x,
-					  es->geometry.y,
-					  es->geometry.width,
-					  es->geometry.height);
+					es->geometry.x,
+					es->geometry.y,
+					es->geometry.width,
+					es->geometry.height);
 	
 	pixman_region32_intersect(&repaint,
 				  &boundingbox, damage);
@@ -803,7 +770,7 @@ WL_EXPORT void		weston_surface_draw_norm			(tSurf *es, tOutput *output, pixman_r
 //	else
 		filter = GL_NEAREST;
 	
-	n = texture_region(es, &repaint);
+	n = texture_region (output, es, &repaint);
 	
 	glBindTexture(GL_TEXTURE_2D, es->texture);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
@@ -826,91 +793,6 @@ WL_EXPORT void		weston_surface_draw_norm			(tSurf *es, tOutput *output, pixman_r
 
 out:
 	pixman_region32_fini(&repaint);
-}
-
-WL_EXPORT void		weston_surface_draw_left			(tSurf *es, tOutput *output, pixman_region32_t *damage)
-{
-	tComp *ec = gShell.pEC;
-	GLfloat *v;
-	pixman_region32_t repaint;
-	GLint filter;
-	int n;
-
-	pixman_region32_init(&repaint);
-	
-	pixman_region32_t boundingbox;
-	pixman_region32_init_rect(&boundingbox,
-					  es->geometry.x,
-					  es->geometry.y,
-					  es->geometry.width,
-					  es->geometry.height);
-	
-	pixman_region32_intersect(&repaint,
-				  &boundingbox, damage);
-	pixman_region32_subtract(&repaint, &repaint, &es->clip);
-
-	if (!pixman_region32_not_empty(&repaint))
-		goto out;
-	
-//	if (!es->shader || !es->shader->proj_uniform)
-//		goto out;
-	
-	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_BLEND);
-
-	if (ec->current_shader != es->shader) {
-		glUseProgram(es->shader->program);
-		ec->current_shader = es->shader;
-	}
-
-	glUniformMatrix4fv(es->shader->proj_uniform, 1, GL_FALSE, output->matrix.d);
-	glUniform1i(es->shader->tex_uniform, 0);
-	glUniform4fv(es->shader->color_uniform, 1, es->color);
-	glUniform1f(es->shader->alpha_uniform, es->alpha / 255.0);
-	glUniform1f(es->shader->texwidth_uniform, (GLfloat)es->geometry.width / es->pitch);
-	
-//	if (es->transform.enabled || output->zoom.active)
-//		filter = GL_LINEAR;
-//	else
-		filter = GL_NEAREST;
-	
-	n = texture_region_left(output, es, &repaint);
-	
-	glBindTexture(GL_TEXTURE_2D, es->texture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
-	
-	v = ec->vertices.data;
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof *v, &v[0]);
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof *v, &v[2]);
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-
-	glDrawElements(GL_TRIANGLES, n * 6, GL_UNSIGNED_INT, ec->indices.data);
-
-	glDisableVertexAttribArray(1);
-	glDisableVertexAttribArray(0);
-
-	ec->vertices.size = 0;
-	ec->indices.size = 0;
-
-out:
-	pixman_region32_fini(&repaint);
-}
-
-WL_EXPORT void		weston_surface_draw			(tSurf *es, tOutput *pout, pixman_region32_t *damage)
-{
-	switch (pout->Rotation) {
-	case Output_Rotation_eNorm:
-		weston_surface_draw_norm (es, pout, damage);
-		break;
-	case Output_Rotation_eLeft:
-		weston_surface_draw_left (es, pout, damage);
-		break;
-//	case Output_Rotation_eRight:
-//		pout->width = pout->current->height;
-//		pout->height = pout->current->width;
-	}
 }
 
 
@@ -971,7 +853,7 @@ WL_EXPORT void		weston_buffer_post_release		(struct wl_buffer *buffer)
 WL_EXPORT void		weston_output_damage			(tOutput *output)
 {
 	tComp *compositor = output->compositor;
-
+	
 	pixman_region32_union(&compositor->damage, &compositor->damage, &output->region);
 	weston_compositor_schedule_repaint(compositor);
 }
@@ -1207,20 +1089,21 @@ static void		surface_attach				(struct wl_client *client, struct wl_resource *re
 static void		surface_damage				(struct wl_client *client, struct wl_resource *resource, int32_t x, int32_t y, int32_t width, int32_t height)
 {
 	tSurf *es = resource->data;
-
+	
 	weston_surface_damage_rectangle(es, x, y, width, height);
-
+	
 	if (es->buffer && wl_buffer_is_shm(es->buffer)) {
 		glBindTexture(GL_TEXTURE_2D, es->texture);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, es->pitch);
 		glPixelStorei(GL_UNPACK_SKIP_PIXELS, x);
 		glPixelStorei(GL_UNPACK_SKIP_ROWS, y);
-
+		
 		glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height,
 				GL_BGRA_EXT, GL_UNSIGNED_BYTE,
 				wl_shm_buffer_get_data(es->buffer));
 	}
 }
+
 
 static void		destroy_frame_callback			(struct wl_resource *resource)
 {
@@ -1229,7 +1112,6 @@ static void		destroy_frame_callback			(struct wl_resource *resource)
 	wl_list_remove(&cb->link);
 	free(cb);
 }
-
 static void		surface_frame				(struct wl_client *client, struct wl_resource *resource, uint32_t callback)
 {
 	struct weston_frame_callback *cb;
@@ -1250,14 +1132,14 @@ static void		surface_frame				(struct wl_client *client, struct wl_resource *res
 	wl_client_add_resource(client, &cb->resource);
 
 	if (es->output) {
-		wl_list_insert(es->output->frame_callback_list.prev,
-			       &cb->link);
+		wl_list_insert(es->output->frame_callback_list.prev, &cb->link);
 	} else {
 		wl_list_insert(es->frame_callback_list.prev, &cb->link);
 	}
 	
 //	shell_restack ();
 }
+
 
 static void		surface_set_opaque_region		(struct wl_client *client, struct wl_resource *resource, struct wl_resource *region_resource)
 {
@@ -1318,23 +1200,21 @@ static void		surface_set_input_region			(struct wl_client *client, struct wl_res
 static void		compositor_create_surface		(struct wl_client *client, struct wl_resource *resource, uint32_t id)
 {
 	dTrace_E("");
-	tComp *ec = resource->data;
 	tSurf *surface;
-
-	surface = weston_surface_create(ec);
+	
+	surface = weston_surface_create();
 	if (surface == NULL) {
 		wl_resource_post_no_memory(resource);
 		return;
 	}
 	surface->client = client;
 	surface->surface.resource.destroy = destroy_surface;
-
+	
 	surface->surface.resource.object.id = id;
 	surface->surface.resource.object.interface = &wl_surface_interface;
-	surface->surface.resource.object.implementation =
-		(void (**)(void)) &surface_interface;
+	surface->surface.resource.object.implementation = (void (**)(void)) &surface_interface;
 	surface->surface.resource.data = surface;
-
+	
 	wl_client_add_resource(client, &surface->surface.resource);
 	dTrace_L("");
 }
@@ -1343,7 +1223,7 @@ static void		destroy_region				(struct wl_resource *resource)
 {
 	struct weston_region *region =
 		container_of(resource, struct weston_region, resource);
-
+	
 	pixman_region32_fini(&region->region);
 	free(region);
 }
@@ -1574,7 +1454,6 @@ WL_EXPORT void		notify_pointer_focus			(struct wl_input_device *device, tOutput 
 	}
 }
 
-
 WL_EXPORT void		notify_keyboard_focus			(struct wl_input_device *device, struct wl_array *keys)
 {
 	tFocus *wd =
@@ -1677,32 +1556,32 @@ WL_EXPORT void		notify_touch				(struct wl_input_device *device, uint32_t time, 
 
 
 
-static void			input_device_attach				(struct wl_client *client,
-											struct wl_resource *resource,
-											uint32_t serial,
-											struct wl_resource *buffer_resource, int32_t x, int32_t y)
+static void		input_device_attach			(struct wl_client *client,
+								struct wl_resource *resource,
+								uint32_t serial,
+								struct wl_resource *buffer_resource, int32_t x, int32_t y)
 {
 //	dTrace_E("");
 	tFocus *device = resource->data;
 	tComp *compositor = device->compositor;
 	struct wl_buffer *buffer = NULL;
-
+	
 	if (serial < device->input_device.pointer_focus_serial)
 		return;
 	if (device->input_device.pointer_focus == NULL)
 		return;
 	if (device->input_device.pointer_focus->resource.client != client)
 		return;
-
+	
 	if (buffer_resource)
 		buffer = buffer_resource->data;
-
+	
 //	printf ("!!!!!!!!!!!! input_device_attach buffer %lx\n", buffer);
 	weston_surface_attach(&device->sprite->surface, buffer);
-
+	
 	if (!buffer)
 		return;
-
+	
 //	if (!weston_surface_is_mapped(device->sprite)) {
 	//	wl_list_insert(&compositor->cursor_layer.surface_list,
 	//		       &device->sprite->layer_link);
@@ -1711,7 +1590,6 @@ static void			input_device_attach				(struct wl_client *client,
 	//	printf ("!!!!!!!!!!!! input_device_attach %lx\n", device->sprite->output);
 //	}
 	
-
 	device->hotspot_x = x;
 	device->hotspot_y = y;
 	weston_surface_configure(device->sprite,
@@ -1733,30 +1611,31 @@ static const struct wl_surface_interface surface_interface = {
 	surface_set_opaque_region,
 	surface_set_input_region
 };
+
 static const struct wl_region_interface region_interface = {
 	region_destroy,
 	region_add,
 	region_subtract
 };
+
 static const struct wl_input_device_interface input_device_interface = {
 	input_device_attach,
 };
-
-
-/** *********************************** Main ************************************ **/
 
 static const struct wl_compositor_interface compositor_interface = {
 	compositor_create_surface,
 	compositor_create_region
 };
 
+
+/** *********************************** Main ************************************ **/
+
 WL_EXPORT void		weston_compositor_wake			(tComp *compositor)
 {
 	compositor->state = WESTON_COMPOSITOR_ACTIVE;
 //	weston_compositor_fade(compositor, 0.0);
-
-	wl_event_source_timer_update(compositor->idle_source,
-				     compositor->idle_time * 1000);
+	
+//	wl_event_source_timer_update(compositor->idle_source, compositor->idle_time * 1000);
 }
 
 static void		weston_compositor_dpms_on		(tComp *compositor)
@@ -1790,6 +1669,7 @@ void			weston_compositor_idle_release		(tComp *compositor)
 	weston_compositor_activity(compositor);
 }
 
+/*
 static int		idle_handler				(void *data)
 {
 	tComp *compositor = data;
@@ -1800,7 +1680,7 @@ static int		idle_handler				(void *data)
 //	weston_compositor_fade(compositor, 1.0);
 
 	return 1;
-}
+}*/
 
 void			weston_input_update_drag_surface		(struct wl_input_device *input_device, int dx, int dy);
 
@@ -2318,16 +2198,16 @@ WL_EXPORT void		weston_output_destroy			(tOutput *output)
 WL_EXPORT void		weston_output_update_zoom		(tOutput *output, int x, int y)
 {
 	float ratio;
-
+	
 	if (output->zoom.level <= 0)
 		return;
-
+	
 	output->zoom.magnification = 1 / output->zoom.level;
 	ratio = 1 - (1 / output->zoom.magnification);
-
+	
 	output->zoom.trans_x = (((float)(x - output->x) / output->current->width) * (ratio * 2)) - ratio;
 	output->zoom.trans_y = (((float)(y - output->y) / output->current->height) * (ratio * 2)) - ratio;
-
+	
 	output->dirty = 1;
 	weston_output_damage(output);
 }
@@ -2538,8 +2418,8 @@ WL_EXPORT int		weston_compositor_init			(tComp *ec, struct wl_display *display)
 		return -1;
 
 	loop = wl_display_get_event_loop(ec->wl_display);
-	ec->idle_source = wl_event_loop_add_timer(loop, idle_handler, ec);
-	wl_event_source_timer_update(ec->idle_source, ec->idle_time * 1000);
+//	ec->idle_source = wl_event_loop_add_timer(loop, idle_handler, ec);
+//	wl_event_source_timer_update(ec->idle_source, ec->idle_time * 1000);
 
 	ec->input_loop = wl_event_loop_create();
 
@@ -2552,9 +2432,9 @@ WL_EXPORT void		weston_compositor_shutdown		(tComp *ec)
 {
 	tOutput *output, *next;
 
-	wl_event_source_remove(ec->idle_source);
-	if (ec->input_loop_source)
-		wl_event_source_remove(ec->input_loop_source);
+//	wl_event_source_remove(ec->idle_source);
+//	if (ec->input_loop_source)
+//		wl_event_source_remove(ec->input_loop_source);
 
 	/* Destroy all outputs associated with this compositor */
 	wl_list_for_each_safe(output, next, &ec->output_list, link)
@@ -3011,10 +2891,9 @@ weston_surface_swap(tSurf *es,
 
 /** *********************************** shell other ************************************ **/
 
-static tOutput *	get_default_output				(tComp *compositor)
+static tOutput *		get_default_output				(tComp *compositor)
 {
-	return container_of(compositor->output_list.next,
-			    tOutput, link);
+	return container_of(compositor->output_list.next, tOutput, link);
 }
 
 void			shell_unset_fullscreen				(tWin *shsurf)
@@ -3022,8 +2901,7 @@ void			shell_unset_fullscreen				(tWin *shsurf)
 	/* undo all fullscreen things here */
 	shsurf->fullscreen.type = WL_SHELL_SURFACE_FULLSCREEN_METHOD_DEFAULT;
 	shsurf->fullscreen.framerate = 0;
-	wl_list_remove(&shsurf->fullscreen.transform.link);
-	wl_list_init(&shsurf->fullscreen.transform.link);
+	
 	weston_surface_destroy(shsurf->fullscreen.black_surface);
 	shsurf->fullscreen.black_surface = NULL;
 	shsurf->fullscreen_output = NULL;
@@ -3032,18 +2910,17 @@ void			shell_unset_fullscreen				(tWin *shsurf)
 				    shsurf->saved_x, shsurf->saved_y);
 }
 
-int			reset_shell_surface_type			(tWin *surface)
+int			reset_shell_surface_type				(tWin *surface)
 {
 	switch (surface->type) {
 	case SHELL_SURFACE_FULLSCREEN:
 		shell_unset_fullscreen(surface);
 		break;
 	case SHELL_SURFACE_MAXIMIZED:
-	//	surface->output = get_default_output(surface->gShell.pEC);
 		surface->output = CurrentOutput ();
 		weston_surface_set_position(surface->surface,
-					    surface->saved_x,
-					    surface->saved_y);
+						surface->saved_x,
+						surface->saved_y);
 		break;
 	case SHELL_SURFACE_PANEL:
 	case SHELL_SURFACE_BACKGROUND:
@@ -3053,8 +2930,8 @@ int			reset_shell_surface_type			(tWin *surface)
 	case SHELL_SURFACE_SCREENSAVER:
 	case SHELL_SURFACE_LOCK:
 		wl_resource_post_error(&surface->resource,
-				       WL_DISPLAY_ERROR_INVALID_METHOD,
-				       "cannot reassign surface type");
+					WL_DISPLAY_ERROR_INVALID_METHOD,
+					"cannot reassign surface type");
 		return -1;
 	case SHELL_SURFACE_NONE:
 	case SHELL_SURFACE_TOPLEVEL:
@@ -3062,7 +2939,6 @@ int			reset_shell_surface_type			(tWin *surface)
 	case SHELL_SURFACE_POPUP:
 		break;
 	}
-	
 	surface->type = SHELL_SURFACE_NONE;
 	return 0;
 }
@@ -3078,9 +2954,9 @@ void			shell_surface_set_toplevel			(struct wl_client *client, struct wl_resourc
 }
 
 void			shell_surface_set_transient			(struct wl_client *client,
-										struct wl_resource *resource,
-										struct wl_resource *parent_resource,
-										int x, int y, uint32_t flags)
+									struct wl_resource *resource,
+									struct wl_resource *parent_resource,
+									int x, int y, uint32_t flags)
 {
 	tWin *pwin = resource->data;
 	
@@ -3137,28 +3013,28 @@ shell_surface_set_maximized(struct wl_client *client,
 	tWin *shsurf = resource->data;
 	tSurf *es = shsurf->surface;
 	uint32_t edges = 0, panel_height = 0;
-
+	
 	/* get the default output, if the client set it as NULL
 	   check whether the ouput is available */
 	if (output_resource)
 		shsurf->output = output_resource->data;
 	else
 		shsurf->output = get_default_output(gShell.pEC);
-
+	
 	if (reset_shell_surface_type(shsurf))
 		return;
-
+	
 	shsurf->saved_x = es->geometry.x;
 	shsurf->saved_y = es->geometry.y;
 	shsurf->saved_position_valid = true;
-
+	
 	panel_height = get_output_panel_height (&gShell, es->output);
 	edges = WL_SHELL_SURFACE_RESIZE_TOP | WL_SHELL_SURFACE_RESIZE_LEFT;
-
+	
 	wl_shell_surface_send_configure(&shsurf->resource, edges,
 					es->output->current->width,
 					es->output->current->height - panel_height);
-
+	
 	shsurf->type = SHELL_SURFACE_MAXIMIZED;
 }
 
@@ -3187,39 +3063,25 @@ create_black_surface(tComp *ec,
 
 /* Create black surface and append it to the associated fullscreen surface.
  * Handle size dismatch and positioning according to the method. */
-static void
-shell_configure_fullscreen(tWin *shsurf)
+static void		shell_configure_fullscreen			(tWin *shsurf)
 {
 	tOutput *output = shsurf->fullscreen_output;
 	tSurf *surface = shsurf->surface;
 	struct weston_matrix *matrix;
 	float scale;
-
+	
 	center_on_output(surface, output);
-
-	if (!shsurf->fullscreen.black_surface)
-		shsurf->fullscreen.black_surface =
-			create_black_surface(gShell.pEC,
-					     surface,
-					     output->x, output->y,
-					     output->current->width,
-					     output->current->height);
-
-//	wl_list_remove(&shsurf->fullscreen.black_surface->layer_link);
-//	wl_list_insert(&surface->layer_link, &shsurf->fullscreen.black_surface->layer_link);
-	shsurf->fullscreen.black_surface->output = output;
-
+	
 	switch (shsurf->fullscreen.type) {
 	case WL_SHELL_SURFACE_FULLSCREEN_METHOD_DEFAULT:
 		break;
 	case WL_SHELL_SURFACE_FULLSCREEN_METHOD_SCALE:
-		matrix = &shsurf->fullscreen.transform.matrix;
+	//	matrix = &shsurf->fullscreen.transform.matrix;
 		weston_matrix_init(matrix);
 		scale = (float)output->current->width/(float)surface->geometry.width;
 		weston_matrix_scale(matrix, scale, scale, 1);
-		wl_list_remove(&shsurf->fullscreen.transform.link);
-	//	wl_list_insert(surface->geometry.transformation_list.prev,
-	//		       &shsurf->fullscreen.transform.link);
+	//	wl_list_remove(&shsurf->fullscreen.transform.link);
+	//	wl_list_insert(surface->geometry.transformation_list.prev, &shsurf->fullscreen.transform.link);
 		weston_surface_set_position(surface, output->x, output->y);
 		break;
 	case WL_SHELL_SURFACE_FULLSCREEN_METHOD_DRIVER:
@@ -3253,34 +3115,34 @@ void			shell_map_fullscreen				(tWin *shsurf)
 }
 
 void			shell_surface_set_fullscreen			(struct wl_client *client,
-										struct wl_resource *resource,
-										uint32_t method,
-										uint32_t framerate,
-										struct wl_resource *output_resource)
+									struct wl_resource *resource,
+									uint32_t method,
+									uint32_t framerate,
+									struct wl_resource *output_resource)
 {
 	tWin *shsurf = resource->data;
 	tSurf *es = shsurf->surface;
-
+	
 	if (output_resource)
 		shsurf->output = output_resource->data;
 	else
 		shsurf->output = get_default_output(gShell.pEC);
-
+	
 	if (reset_shell_surface_type(shsurf))
 		return;
-
+	
 	shsurf->fullscreen_output = shsurf->output;
 	shsurf->fullscreen.type = method;
 	shsurf->fullscreen.framerate = framerate;
 	shsurf->type = SHELL_SURFACE_FULLSCREEN;
-
+	
 	shsurf->saved_x = es->geometry.x;
 	shsurf->saved_y = es->geometry.y;
 	shsurf->saved_position_valid = true;
-
+	
 	if (weston_surface_is_mapped(es))
 		shsurf->force_configure = 1;
-
+	
 	wl_shell_surface_send_configure(&shsurf->resource, 0,
 					shsurf->output->current->width,
 					shsurf->output->current->height);
@@ -3289,10 +3151,9 @@ void			shell_surface_set_fullscreen			(struct wl_client *client,
 void			popup_grab_focus					(struct wl_pointer_grab *grab, struct wl_surface *surface, int32_t x, int32_t y)
 {
 	struct wl_input_device *device = grab->input_device;
-	tWin *priv =
-		container_of(grab, tWin, popup.grab);
+	tWin *priv = container_of(grab, tWin, popup.grab);
 	struct wl_client *client = priv->surface->surface.resource.client;
-
+	
 	if (surface && surface->resource.client == client) {
 		wl_input_device_set_pointer_focus(device, surface, x, y);
 		grab->focus = surface;
@@ -3302,7 +3163,7 @@ void			popup_grab_focus					(struct wl_pointer_grab *grab, struct wl_surface *su
 	}
 }
 
-void			popup_grab_motion					(struct wl_pointer_grab *grab, uint32_t time, int32_t sx, int32_t sy)
+void			popup_grab_motion				(struct wl_pointer_grab *grab, uint32_t time, int32_t sx, int32_t sy)
 {
 	struct wl_resource *resource;
 
@@ -3311,28 +3172,25 @@ void			popup_grab_motion					(struct wl_pointer_grab *grab, uint32_t time, int32
 		wl_input_device_send_motion(resource, time, sx, sy);
 }
 
-void			popup_grab_button					(struct wl_pointer_grab *grab, uint32_t time, uint32_t button, int32_t state)
+void			popup_grab_button				(struct wl_pointer_grab *grab, uint32_t time, uint32_t button, int32_t state)
 {
 	struct wl_resource *resource;
-	tWin *shsurf =
-		container_of(grab, tWin, popup.grab);
+	tWin *shsurf = container_of(grab, tWin, popup.grab);
 	struct wl_display *display;
 	uint32_t serial;
-
+	
 	resource = grab->input_device->pointer_focus_resource;
 	if (resource) {
-		display = wl_client_get_display(resource->client);
-		serial = wl_display_get_serial(display);
-		wl_input_device_send_button(resource, serial,
-					    time, button, state);
-	} else if (state == 0 &&
-		   (shsurf->popup.initial_up ||
-		    time - shsurf->popup.time > 500)) {
+		display = wl_client_get_display (resource->client);
+		serial = wl_display_get_serial (display);
+		wl_input_device_send_button (resource, serial, time, button, state);
+	}else if (state == 0 && (shsurf->popup.initial_up || time - shsurf->popup.time > 500))
+	{
 		wl_shell_surface_send_popup_done(&shsurf->resource);
 		wl_input_device_end_pointer_grab(grab->input_device);
 		shsurf->popup.grab.input_device = NULL;
 	}
-
+	
 	if (state == 0)
 		shsurf->popup.initial_up = 1;
 }
@@ -3360,14 +3218,13 @@ void			shell_map_popup					(tWin *shsurf, uint32_t serial)
 //			parent->transform.matrix;
 //	} else {
 		/* construct x, y translation matrix */
-		weston_matrix_init(&shsurf->popup.parent_transform.matrix);
-		shsurf->popup.parent_transform.matrix.d[12] =
-			parent->geometry.x;
-		shsurf->popup.parent_transform.matrix.d[13] =
-			parent->geometry.y;
+	//	weston_matrix_init(&shsurf->popup.parent_transform.matrix);
+	//	shsurf->popup.parent_transform.matrix.d[12] =
+	//		parent->geometry.x;
+	//	shsurf->popup.parent_transform.matrix.d[13] =
+	//		parent->geometry.y;
 //	}
-//	wl_list_insert(es->geometry.transformation_list.prev,
-//		       &shsurf->popup.parent_transform.link);
+//	wl_list_insert(es->geometry.transformation_list.prev, &shsurf->popup.parent_transform.link);
 	weston_surface_set_position(es, shsurf->popup.x, shsurf->popup.y);
 
 	shsurf->popup.grab.input_device = device;
@@ -4263,11 +4120,10 @@ void		shell_get_shell_surface		(struct wl_client *client,
 	shsurf->fullscreen.type = WL_SHELL_SURFACE_FULLSCREEN_METHOD_DEFAULT;
 	shsurf->fullscreen.framerate = 0;
 	shsurf->fullscreen.black_surface = NULL;
-	wl_list_init(&shsurf->fullscreen.transform.link);
+//	wl_list_init(&shsurf->fullscreen.transform.link);
 
 	shsurf->surface_destroy_listener.notify = shell_handle_surface_destroy;
-	wl_signal_add(&surface->surface.resource.destroy_signal,
-		      &shsurf->surface_destroy_listener);
+	wl_signal_add(&surface->surface.resource.destroy_signal, &shsurf->surface_destroy_listener);
 
 	/* init link so its safe to always remove it in destroy_shell_surface */
 	wl_list_init(&shsurf->link);
@@ -4331,7 +4187,7 @@ tWin*		Shell_get_surface			(struct wl_client *client, tSurf *surface)
 	shsurf->fullscreen.type = WL_SHELL_SURFACE_FULLSCREEN_METHOD_DEFAULT;
 	shsurf->fullscreen.framerate = 0;
 	shsurf->fullscreen.black_surface = NULL;
-	wl_list_init(&shsurf->fullscreen.transform.link);
+//	wl_list_init(&shsurf->fullscreen.transform.link);
 
 	shsurf->surface_destroy_listener.notify = shell_handle_surface_destroy;
 	wl_signal_add(&surface->surface.resource.destroy_signal,

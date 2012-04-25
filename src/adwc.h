@@ -248,13 +248,8 @@ struct weston_compositor
 	/* There can be more than one, but not right now... */
 	struct wl_input_device *input_device;
 	
-//	struct weston_layer fade_layer;
-//	struct weston_layer cursor_layer;	//shell attaches its layers to this?
-	
 	struct wl_list output_list;
 	struct wl_list input_device_list;
-	
-//	struct wl_list layer_list;
 	
 	struct wl_list surface_list;	//list of what the backend draws?
 	
@@ -377,32 +372,23 @@ struct wl_shell
 		struct weston_process process;
 		struct wl_client *client;
 		struct wl_resource *desktop_shell;
-
+		
 		unsigned deathcount;
 		uint32_t deathstamp;
-	} child;
-
+	}child;
+	
 	bool locked;
 	bool prepare_event_sent;
-
+	
 	tWin *lock_surface;
 	struct wl_listener lock_surface_listener;
 	
 	struct wl_list backgrounds;
 	struct wl_list panels;
 	
-/*	struct {
-		char *path;
-		int duration;
-		struct wl_resource *binding;
-		struct wl_list surfaces;
-		struct weston_process process;
-	}screensaver;*/
-	
 	tSurf *debug_repaint_surface;
 	
 	struct wl_list L[L_NUM];	//array with lists of windows
-	
 };
 extern struct wl_shell gShell;
 
@@ -411,12 +397,12 @@ extern struct wl_shell gShell;
 
 enum shell_surface_type {
 	SHELL_SURFACE_NONE,
-
+	
 	SHELL_SURFACE_PANEL,
 	SHELL_SURFACE_BACKGROUND,
 	SHELL_SURFACE_LOCK,
 	SHELL_SURFACE_SCREENSAVER,
-
+	
 	SHELL_SURFACE_TOPLEVEL,
 	SHELL_SURFACE_TRANSIENT,
 	SHELL_SURFACE_FULLSCREEN,
@@ -427,32 +413,31 @@ enum shell_surface_type {
 struct shell_surface
 {
 	struct wl_resource resource;
-
+	
 	tSurf *surface;
 	struct wl_listener surface_destroy_listener;
 	tWin *parent;
 	struct wl_shell *shell;
-
+	
 	enum shell_surface_type type;
 	int32_t saved_x, saved_y;
 	
 	bool saved_position_valid;
 	
-	
 	struct {
 		struct wl_pointer_grab grab;
 		uint32_t time;
 		int32_t x, y;
-		struct weston_transform parent_transform;
+	//	struct weston_transform parent_transform;
 		int32_t initial_up;
-	} popup;
+	}popup;
 	
 	struct {
 		enum wl_shell_surface_fullscreen_method type;
-		struct weston_transform transform; /* matrix from x, y */
+	//	struct weston_transform transform; /* matrix from x, y */
 		uint32_t framerate;
 		tSurf *black_surface;
-	} fullscreen;
+	}fullscreen;
 	
 	tOutput *fullscreen_output;
 	tOutput *output;
@@ -628,8 +613,7 @@ weston_environment_get_fd(const char *env);
 struct wl_list *
 weston_compositor_top(tComp *compositor);
 
-tSurf *
-weston_surface_create(tComp *compositor);
+tSurf*		weston_surface_create			();
 
 void
 weston_surface_configure(tSurf *surface,

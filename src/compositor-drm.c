@@ -175,7 +175,6 @@ drm_output_prepare_scanout_surface(struct drm_output *output)
 	    es->geometry.y != output->base.y ||
 	    es->geometry.width != output->base.current->width ||
 	    es->geometry.height != output->base.current->height ||
-//	    es->transform.enabled ||
 	    es->image == EGL_NO_IMAGE_KHR)
 		return -1;
 
@@ -205,13 +204,13 @@ drm_output_render(struct drm_output *output, pixman_region32_t *damage)
 	struct drm_compositor *compositor =
 		(struct drm_compositor *) output->base.compositor;
 	struct weston_surface *surface;
-
+	
 	if (!eglMakeCurrent(compositor->base.display, output->egl_surface,
 			    output->egl_surface, compositor->base.context)) {
 		fprintf(stderr, "failed to make current\n");
 		return;
 	}
-
+	
 	wl_list_for_each_reverse(surface, &compositor->base.surface_list, link)
 		weston_surface_draw(surface, &output->base, damage);
 	
