@@ -1,4 +1,8 @@
 
+#define dWayland_WithPosition		0
+#define dWayland_WithGlobalTransient	0
+
+#define dXWayland_Mode	0
 
 #define dModKey MODIFIER_ALT
 /*

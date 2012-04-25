@@ -2554,8 +2554,9 @@ move_grab_motion(struct wl_pointer_grab *grab,
 				 device->y + move->dy,
 				 es->geometry.width, es->geometry.height);
 	
+	#if dWayland_WithPosition
 	wl_shell_surface_send_position(&move->base.shsurf->resource, device->x + move->dx, device->y + move->dy);
-	
+	#endif
 	weston_surface_damage_below(es);
 	weston_compositor_schedule_repaint(gShell.pEC);
 	
@@ -4848,7 +4849,9 @@ void layout(tOutput* output)
 		//	}else {
 				weston_surface_configure(es, cx - esml, cy - esmt, cw + esml + esmr, ch + esmt + esmb);
 				wl_shell_surface_send_configure(&c->resource, 0, cw + esml + esmr, ch + esmt + esmb);
+				#if dWayland_WithPosition
 				wl_shell_surface_send_position(&c->resource, cx - esml, cy - esmt);
+				#endif
 		//	}
 			weston_surface_assign_output (es);
 		}

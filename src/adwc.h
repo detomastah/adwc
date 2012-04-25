@@ -60,7 +60,6 @@
 #include "../shared/config-parser.h"
 
 
-#define dXWayland_Mode	0
 
 typedef uint32_t tTags;
 
