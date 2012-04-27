@@ -277,24 +277,75 @@ static void		device_handle_new_drag_icon		(struct wl_listener *listener, void *d
 
 /** *********************************** NEW ************************************ **/
 
+static void		weston_surface_attach			(struct wl_surface *surface, struct wl_buffer *buffer);
+
+
 /** *********************************** GLOBAL ************************************ **/
 
-tOutput*		CurrentOutput		()
+#define dOutput_Iter(_block)	\
+	do {	\
+		tOutput *iout;	\
+		wl_list_for_each(iout, &gBE.base.output_list, link) {	\
+			_block	\
+		}	\
+	}while(0)
+
+tOutput*		CurrentOutput			()
 {
-	if (gShell.pEC->input_device
-		&& ((tFocus*) gShell.pEC->input_device)->sprite
-		&& ((tFocus*) gShell.pEC->input_device)->sprite->output
+	if (gBE.base.input_device
+		&& ((tFocus*) gBE.base.input_device)->sprite
+		&& ((tFocus*) gBE.base.input_device)->sprite->output
 	)
-		return ((tFocus*) gShell.pEC->input_device)->sprite->output;
+		return ((tFocus*) gBE.base.input_device)->sprite->output;
 	
-	return container_of(&gShell.pEC->output_list, tOutput, link);
+	return container_of(&gBE.base.output_list, tOutput, link);
+}
+
+void		MinMaxUpdate			()
+{
+	gBE.base.MinX = gBE.base.MinY = INT_MAX;
+	gBE.base.MaxX = gBE.base.MaxY = INT_MIN;
+	
+	dOutput_Iter (
+		dDExpr(d, iout->x);
+		dDExpr(d, iout->y);
+		dDExpr(d, iout->width);
+		dDExpr(d, iout->height);
+		if (iout->x + iout->width - 1 > gBE.base.MaxX)
+			gBE.base.MaxX = iout->x + iout->width - 1;
+		if (iout->x < gBE.base.MinX)
+			gBE.base.MinX = iout->x;
+		
+		if (iout->y + iout->height - 1 > gBE.base.MaxY)
+			gBE.base.MaxY = iout->y + iout->height - 1;
+		if (iout->y < gBE.base.MinY)
+			gBE.base.MinY = iout->y;
+	);
+	
+	dDExpr(d, gBE.base.MinX);
+	dDExpr(d, gBE.base.MaxX);
+	dDExpr(d, gBE.base.MinY);
+	dDExpr(d, gBE.base.MaxY);
+}
+
+void		LimitXY				(int* px, int* py)
+{
+	if (*px < gBE.base.MinX)
+		*px = gBE.base.MinX;
+	else if (*px > gBE.base.MaxX)
+		*px = gBE.base.MaxX;
+	
+	if (*py < gBE.base.MinY)
+		*py = gBE.base.MinY;
+	else if (*py > gBE.base.MaxY)
+		*py = gBE.base.MaxY;
 }
 
 
-bool		Tag_isVisible		(tTags tags)
+bool		Tag_isVisible			(tTags tags)
 {
 	tOutput *iout;
-	wl_list_for_each(iout, &gShell.pEC->output_list, link) {
+	wl_list_for_each(iout, &gBE.base.output_list, link) {
 		if (iout->Tags & tags) {
 			return 1;
 		}
@@ -302,10 +353,10 @@ bool		Tag_isVisible		(tTags tags)
 	return 0;
 }
 
-Bool		Tag_isVisibleOnOther	(tTags tags, tOutput *output)
+Bool		Tag_isVisibleOnOther		(tTags tags, tOutput *output)
 {
 	tOutput *iout;
-	wl_list_for_each(iout, &gShell.pEC->output_list, link) {
+	wl_list_for_each(iout, &gBE.base.output_list, link) {
 		if (iout == output)
 			continue;
 		if (iout->Tags & tags) {
@@ -314,6 +365,82 @@ Bool		Tag_isVisibleOnOther	(tTags tags, tOutput *output)
 	}
 	return 0;
 }
+
+
+tSurf*		weston_compositor_pick_surface	(tComp *compositor, int32_t x, int32_t y, int32_t *sx, int32_t *sy);
+
+
+/** *********************************** Buffer ************************************ **/
+
+
+#if 0
+static void		weston_surface_attach			(struct wl_surface *surface, struct wl_buffer *buffer)
+{
+	tSurf *es = (tSurf *) surface;
+	tComp *ec = gShell.pEC;
+
+	if (es->buffer) {
+		weston_buffer_post_release(es->buffer);
+		wl_list_remove (&es->buffer_destroy_listener.link);
+	}
+
+	es->buffer = buffer;
+
+	if (!buffer) {
+	//	if (weston_surface_is_mapped (es))
+	//		weston_surface_unmap(es);
+		return;
+	}
+	
+	buffer->busy_count++;
+	wl_signal_add (&es->buffer->resource.destroy_signal, &es->buffer_destroy_listener);
+	
+	if (es->geometry.width != buffer->width || es->geometry.height != buffer->height) {
+		undef_region(&es->input);
+		pixman_region32_fini(&es->opaque);
+		pixman_region32_init(&es->opaque);
+	}
+	
+	if (!es->texture) {
+		glGenTextures(1, &es->texture);
+		glBindTexture(GL_TEXTURE_2D, es->texture);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		es->shader = &ec->texture_shader;
+	}else {
+		glBindTexture(GL_TEXTURE_2D, es->texture);
+	}
+	
+	if (wl_buffer_is_shm(buffer)) {
+		es->pitch = wl_shm_buffer_get_stride(buffer) / 4;
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_BGRA_EXT,
+			es->pitch, es->buffer->height, 0,
+			GL_BGRA_EXT, GL_UNSIGNED_BYTE, NULL);
+	}else {
+		if (es->image != EGL_NO_IMAGE_KHR)
+			ec->destroy_image(ec->display, es->image);
+		es->image = ec->create_image (ec->display, NULL, EGL_WAYLAND_BUFFER_WL, buffer, NULL);
+		
+		ec->image_target_texture_2d (GL_TEXTURE_2D, es->image);
+		
+		es->pitch = buffer->width;
+	}
+}
+/*
+	if (es->buffer && wl_buffer_is_shm(es->buffer)) {
+		glBindTexture(GL_TEXTURE_2D, es->texture);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, es->pitch);
+		glPixelStorei(GL_UNPACK_SKIP_PIXELS, x);
+		glPixelStorei(GL_UNPACK_SKIP_ROWS, y);
+		
+		glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height,
+				GL_BGRA_EXT, GL_UNSIGNED_BYTE,
+				wl_shm_buffer_get_data(es->buffer));
+	}
+	
+	*/
+#endif
+
 
 
 
@@ -333,7 +460,7 @@ void		Output_TagSet			(tOutput *out, tTags tags)
 	
 	tOutput *iout;
 	int i = 0;
-	wl_list_for_each(iout, &gShell.pEC->output_list, link) {
+	wl_list_for_each(iout, &gBE.base.output_list, link) {
 		if (iout == out)
 			break;
 		i++;
@@ -345,7 +472,7 @@ void		Output_TagSet			(tOutput *out, tTags tags)
 void		Output_TagView			(tOutput *out, tTags newtag)
 {
 	tOutput *iout;
-	wl_list_for_each(iout, &gShell.pEC->output_list, link) {
+	wl_list_for_each(iout, &gBE.base.output_list, link) {
 		
 		if (iout != out && Output_TagisVisible (iout, newtag)) {
 			Output_TagSet (iout, out->Tags);
@@ -383,6 +510,123 @@ tWin*		Output_PanelGet			(tOutput *output)
 	return 0;
 }
 
+
+
+/** *********************************** Focus ************************************ **/
+
+#define dFocus_CurrentOutput(_pfocus)	((_pfocus)->sprite->output)
+
+void		weston_device_repick		(struct wl_input_device *device)
+{
+	tFocus *wd = (tFocus *) device;
+	const struct wl_pointer_grab_interface *interface;
+	tSurf *surface, *focus;
+
+	surface = weston_compositor_pick_surface(wd->compositor,
+						 device->x, device->y,
+						 &device->current_x,
+						 &device->current_y);
+
+	if (&surface->surface != device->current) {
+		interface = device->pointer_grab->interface;
+		interface->focus(device->pointer_grab, &surface->surface,
+				 device->current_x, device->current_y);
+		device->current = &surface->surface;
+	}
+
+	focus = (tSurf *) device->pointer_grab->focus;
+	
+	if (focus) {
+	//	tWin* shsurf = get_shell_surface(focus);
+	//	if (shsurf)
+	//		activate(shsurf->shell, focus, device);
+	//	else
+			weston_surface_activate(focus, device);
+		
+		weston_surface_from_global(focus, device->x, device->y, &device->pointer_grab->x, &device->pointer_grab->y);
+	}
+}
+
+void		Focus_MoveTo			(tFocus* pfoc, int x, int y)
+{
+	tComp *ec = gShell.pEC;
+	tOutput *pout;
+	
+//	dDExpr(d, x);
+//	dDExpr(d, y);
+	
+	pout = dFocus_CurrentOutput (pfoc);
+	if (!pout
+		|| x < pout->x || x >= pout->x + pout->width
+		|| y < pout->y || y >= pout->y + pout->height
+	) {//TODO add a few other modes, but for now we just allow movement in dead space
+		if (pout)
+			be_output_set_cursor (pout, 0);
+		LimitXY (&x, &y);
+		dFocus_CurrentOutput(pfoc) = 0;
+		dOutput_Iter (
+			if (x >= iout->x && x < iout->x + iout->width
+				&& y >= iout->y && y < iout->y + iout->height
+			) {
+				dFocus_CurrentOutput(pfoc) = iout;
+			}
+		);
+	}
+	
+	weston_input_update_drag_surface (&pfoc->input_device, x - pfoc->input_device.x, y - pfoc->input_device.y);
+	
+	pfoc->input_device.x = x;
+	pfoc->input_device.y = y;
+//	dDExpr(d, pfoc->input_device.x);
+//	dDExpr(d, pfoc->input_device.y);
+	
+	weston_device_repick (&pfoc->input_device);
+	
+	const struct wl_pointer_grab_interface *interface;
+	interface = pfoc->input_device.pointer_grab->interface;
+	interface->motion (pfoc->input_device.pointer_grab, time, pfoc->input_device.pointer_grab->x, pfoc->input_device.pointer_grab->y);
+
+	if (pfoc->sprite && dFocus_CurrentOutput(pfoc)) {
+		be_output_set_cursor (dFocus_CurrentOutput(pfoc), pfoc);
+	}
+}
+
+
+void		input_device_attach		(struct wl_client *client,
+						struct wl_resource *resource,
+						uint32_t serial,
+						struct wl_resource *buffer_resource, int32_t x, int32_t y)
+{
+	tFocus *device = resource->data;
+	tComp *compositor = device->compositor;
+	struct wl_buffer *buffer = NULL;
+	
+	if (serial < device->input_device.pointer_focus_serial)
+		return;
+	if (device->input_device.pointer_focus == NULL)
+		return;
+	if (device->input_device.pointer_focus->resource.client != client)
+		return;
+	
+	if (buffer_resource)
+		buffer = buffer_resource->data;
+	
+	tOutput* pout = device->sprite->output;
+	
+	weston_surface_attach (&device->sprite->surface, buffer);
+	
+	if (!buffer)
+		return;
+	
+	device->sprite->output = pout;
+	
+	device->hotspot_x = x;
+	device->hotspot_y = y;
+	weston_surface_configure (device->sprite,
+				device->input_device.x - device->hotspot_x,
+				device->input_device.y - device->hotspot_y,
+				buffer->width, buffer->height);
+}
 
 
 /** ************************************ weston_surface ************************************ **/
@@ -432,7 +676,7 @@ WL_EXPORT void		weston_surface_set_color			(tSurf *surface, GLfloat red, GLfloat
 	surface->color[1] = green;
 	surface->color[2] = blue;
 	surface->color[3] = alpha;
-	surface->shader = &gShell.pEC->solid_shader;
+	surface->shader = &gBE.base.solid_shader;
 }
 
 WL_EXPORT void		weston_surface_damage_below		(tSurf *surface)
@@ -449,7 +693,7 @@ WL_EXPORT void		weston_surface_damage_below		(tSurf *surface)
 				surface->geometry.height);
 	
 	pixman_region32_subtract(&damage, &boundingbox, &surface->clip);
-	pixman_region32_union(&gShell.pEC->damage, &gShell.pEC->damage, &damage);
+	pixman_region32_union(&gBE.base.damage, &gBE.base.damage, &damage);
 	pixman_region32_fini(&damage);
 }
 
@@ -457,15 +701,13 @@ WL_EXPORT void		weston_surface_update_transform		(tSurf *surface)
 {
 	if (!surface->geometry.dirty)
 		return;
-
+	
 	surface->geometry.dirty = 0;
-
+	
 	weston_surface_damage_below(surface);
 	
 	if (region_is_undefined(&surface->input))
-		pixman_region32_init_rect(&surface->input, 0, 0, 
-					  surface->geometry.width,
-					  surface->geometry.height);
+		pixman_region32_init_rect(&surface->input, 0, 0, surface->geometry.width, surface->geometry.height);
 	
 	if (weston_surface_is_mapped(surface))
 		weston_surface_assign_output(surface);
@@ -562,36 +804,7 @@ tSurf*			weston_compositor_pick_surface		(tComp *compositor, int32_t x, int32_t 
 
 void			activate					(struct wl_shell *shell, tSurf *es, tFocus *device);
 
-void			weston_device_repick			(struct wl_input_device *device)
-{
-	tFocus *wd = (tFocus *) device;
-	const struct wl_pointer_grab_interface *interface;
-	tSurf *surface, *focus;
 
-	surface = weston_compositor_pick_surface(wd->compositor,
-						 device->x, device->y,
-						 &device->current_x,
-						 &device->current_y);
-
-	if (&surface->surface != device->current) {
-		interface = device->pointer_grab->interface;
-		interface->focus(device->pointer_grab, &surface->surface,
-				 device->current_x, device->current_y);
-		device->current = &surface->surface;
-	}
-
-	focus = (tSurf *) device->pointer_grab->focus;
-	
-	if (focus) {
-	//	tWin* shsurf = get_shell_surface(focus);
-	//	if (shsurf)
-	//		activate(shsurf->shell, focus, device);
-	//	else
-			weston_surface_activate(focus, device);
-		
-		weston_surface_from_global(focus, device->x, device->y, &device->pointer_grab->x, &device->pointer_grab->y);
-	}
-}
 
 WL_EXPORT void		weston_compositor_repick			(tComp *compositor)
 {
@@ -606,7 +819,7 @@ WL_EXPORT void		weston_compositor_repick			(tComp *compositor)
 
 void			weston_surface_unmap			(tSurf *surface)
 {
-	struct wl_input_device *device = gShell.pEC->input_device;
+	struct wl_input_device *device = gBE.base.input_device;
 
 	weston_surface_damage_below(surface);
 	surface->output = NULL;
@@ -696,13 +909,13 @@ static void		weston_surface_attach			(struct wl_surface *surface, struct wl_buff
 	}
 	
 	if (wl_buffer_is_shm(buffer)) {
-		printf ("is shm\n");
+	//	printf ("is shm\n");
 		es->pitch = wl_shm_buffer_get_stride(buffer) / 4;
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_BGRA_EXT,
 			es->pitch, es->buffer->height, 0,
 			GL_BGRA_EXT, GL_UNSIGNED_BYTE, NULL);
 	}else {
-		printf ("is NOT shm\n");
+	//	printf ("is NOT shm\n");
 		if (es->image != EGL_NO_IMAGE_KHR)
 			ec->destroy_image(ec->display, es->image);
 		es->image = ec->create_image(ec->display, NULL,
@@ -787,8 +1000,8 @@ static int		texture_region_left			(tOutput *pout, tSurf *es, pixman_region32_t *
 	inv_height = 1.0 / es->geometry.height;
 	
 	for (i = 0; i < n; i++, v += 16, p += 6) {
-		if (i == 0)
-			printf ("\nb:	%d %d %d %d\n", rectangles[i].x1, rectangles[i].y1, rectangles[i].x2, rectangles[i].y2);
+	//	if (i == 0)
+	//		printf ("\nb:	%d %d %d %d\n", rectangles[i].x1, rectangles[i].y1, rectangles[i].x2, rectangles[i].y2);
 		#define dw(xx,yy)	\
 			weston_surface_from_global (es, rectangles[i].xx/* - pout->x/**/, rectangles[i].yy/* - pout->y/**/, &sx, &sy);	\
 			v[_i++] = pout->x + /**/rectangles[i].yy - pout->y;	\
@@ -802,12 +1015,12 @@ static int		texture_region_left			(tOutput *pout, tSurf *es, pixman_region32_t *
 		dw (x2, y1)
 		dw (x2, y2)
 		
-		if (i == 0) {
+	/*	if (i == 0) {
 			printf ("a:	%f %f %f %f\n", v[_i - 4*4 + 0], v[_i - 4*4 + 1], v[_i - 4*4 + 2], v[_i - 4*4 + 3]);
 			printf ("a:	%f %f %f %f\n", v[_i - 3*4 + 0], v[_i - 3*4 + 1], v[_i - 3*4 + 2], v[_i - 3*4 + 3]);
 			printf ("a:	%f %f %f %f\n", v[_i - 2*4 + 0], v[_i - 2*4 + 1], v[_i - 2*4 + 2], v[_i - 2*4 + 3]);
 			printf ("a:	%f %f %f %f\n", v[_i - 1*4 + 0], v[_i - 1*4 + 1], v[_i - 1*4 + 2], v[_i - 1*4 + 3]);
-		}
+		}*/
 		p[0] = i * 4 + 0;
 		p[1] = i * 4 + 1;
 		p[2] = i * 4 + 2;
@@ -1392,12 +1605,14 @@ WL_EXPORT void		notify_motion				(struct wl_input_device *device, uint32_t time,
 	tOutput *output;
 	const struct wl_pointer_grab_interface *interface;
 	tFocus *wd = (tFocus *) device;
-	tComp *ec = wd->compositor;
-	int x_valid = 0, y_valid = 0;
-	int min_x = INT_MAX, min_y = INT_MAX, max_x = INT_MIN, max_y = INT_MIN;
-
-	weston_compositor_activity(ec);
-
+//	tComp *ec = wd->compositor;
+//	int x_valid = 0, y_valid = 0;
+//	int min_x = INT_MAX, min_y = INT_MAX, max_x = INT_MIN, max_y = INT_MIN;
+	
+	weston_compositor_activity (&gBE.base);
+	
+	Focus_MoveTo (wd, x, y);
+#if 0
 	wl_list_for_each(output, &ec->output_list, link) {
 		if (output->x <= x && x < output->x + output->current->width)
 			x_valid = 1;
@@ -1443,7 +1658,7 @@ WL_EXPORT void		notify_motion				(struct wl_input_device *device, uint32_t time,
 	weston_device_repick(device);
 	
 	interface = device->pointer_grab->interface;
-	interface->motion(device->pointer_grab, time, device->pointer_grab->x, device->pointer_grab->y);
+	interface->motion (device->pointer_grab, time, device->pointer_grab->x, device->pointer_grab->y);
 
 	if (wd->sprite) {
 		weston_surface_set_position(wd->sprite,
@@ -1453,6 +1668,7 @@ WL_EXPORT void		notify_motion				(struct wl_input_device *device, uint32_t time,
 		weston_surface_update_transform(wd->sprite);
 		weston_compositor_schedule_repaint(ec);
 	}
+#endif
 }
 
 WL_EXPORT void		notify_button				(struct wl_input_device *device, uint32_t time, int32_t button, int32_t state)
@@ -1655,7 +1871,7 @@ WL_EXPORT void		notify_touch				(struct wl_input_device *device, uint32_t time, 
 }
 
 
-
+#if 0
 static void		input_device_attach			(struct wl_client *client,
 								struct wl_resource *resource,
 								uint32_t serial,
@@ -1677,30 +1893,32 @@ static void		input_device_attach			(struct wl_client *client,
 		buffer = buffer_resource->data;
 	
 //	printf ("!!!!!!!!!!!! input_device_attach buffer %lx\n", buffer);
-	weston_surface_attach(&device->sprite->surface, buffer);
+	weston_surface_attach (&device->sprite->surface, buffer);
 	
 	if (!buffer)
 		return;
 	
+	tOutput* pout = device->sprite->output;
+	
+	if (device->input_device.x > 
 //	if (!weston_surface_is_mapped(device->sprite)) {
 	//	wl_list_insert(&compositor->cursor_layer.surface_list,
 	//		       &device->sprite->layer_link);
-		weston_surface_assign_output(device->sprite);
-	//	device->sprite->output = container_of(gShell.pEC->output_list.next, tOutput, link);
+	//	weston_surface_assign_output (device->sprite);
+	//	device->sprite->output = container_of(gBE.base.output_list.next, tOutput, link);
 	//	printf ("!!!!!!!!!!!! input_device_attach %lx\n", device->sprite->output);
 //	}
 	
 	device->hotspot_x = x;
 	device->hotspot_y = y;
-	weston_surface_configure(device->sprite,
-				 device->input_device.x - device->hotspot_x,
-				 device->input_device.y - device->hotspot_y,
-				 buffer->width, buffer->height);
+	weston_surface_configure (device->sprite,
+				device->input_device.x - device->hotspot_x,
+				device->input_device.y - device->hotspot_y,
+				buffer->width, buffer->height);
 	
-	surface_damage(NULL, &device->sprite->surface.resource,
-		       0, 0, buffer->width, buffer->height);
+//	surface_damage (NULL, &device->sprite->surface.resource, 0, 0, buffer->width, buffer->height);
 }
-
+#endif
 
 
 static const struct wl_surface_interface surface_interface = {
@@ -1740,9 +1958,9 @@ WL_EXPORT void		weston_compositor_wake			(tComp *compositor)
 
 static void		weston_compositor_dpms_on		(tComp *compositor)
 {
-        tOutput *output;
-
-        wl_list_for_each(output, &compositor->output_list, link)
+	tOutput *output;
+	
+	wl_list_for_each(output, &compositor->output_list, link)
 		if (output->set_dpms)
 			output->set_dpms(output, WESTON_DPMS_ON);
 }
@@ -2360,6 +2578,8 @@ WL_EXPORT void		Output_Update				(tOutput *pout)
 	}
 	pixman_region32_init (&pout->previous_damage);
 	pixman_region32_init_rect (&pout->region, pout->x, pout->y, pout->width, pout->height);
+	
+	MinMaxUpdate ();
 }
 
 
@@ -2701,9 +2921,7 @@ static void		shell_surface_move			(struct wl_client *client, struct wl_resource 
 	tFocus *wd = input_resource->data;
 	tWin *shsurf = resource->data;
 
-	if (wd->input_device.button_count == 0 ||
-	    wd->input_device.grab_serial != serial ||
-	    wd->input_device.pointer_focus != &shsurf->surface->surface)
+	if (wd->input_device.button_count == 0 ||  wd->input_device.grab_serial != serial || wd->input_device.pointer_focus != &shsurf->surface->surface)
 		return;
 
 	if (weston_surface_move(shsurf->surface, wd) < 0)
@@ -3277,7 +3495,7 @@ void			shell_map_popup					(tWin *shsurf, uint32_t serial)
 	es->output = parent->output;
 
 	shsurf->popup.grab.interface = &popup_grab_interface;
-	device = gShell.pEC->input_device;
+	device = gBE.base.input_device;
 
 	weston_surface_update_transform(parent);
 //	if (parent->transform.enabled) {
@@ -3519,12 +3737,12 @@ resume_desktop(struct wl_shell *shell)
 	tWin *tmp;
 	
 //	wl_list_remove(&gShell.lock_layer.link);
-//	wl_list_insert(&gShell.pEC->cursor_layer.link, &gShell.fullscreen_layer.link);
+//	wl_list_insert(&gBE.base.cursor_layer.link, &gShell.fullscreen_layer.link);
 //	wl_list_insert(&gShell.fullscreen_layer.link, &gShell.panel_layer.link);
 //	wl_list_insert(&gShell.panel_layer.link, &gShell.toplevel_layer.link);
 
 	gShell.locked = false;
-	gShell.pEC->idle_time = gShell.pEC->option_idle_time;
+	gBE.base.idle_time = gBE.base.option_idle_time;
 	weston_compositor_wake(gShell.pEC);
 	weston_compositor_damage_all(gShell.pEC);
 }
@@ -3904,7 +4122,7 @@ void		L_ShellToTop		(tWin *shsurf)
 	wl_list_insert(gShell.L[L_eFloat].prev, &shsurf->L_link);
 	
 	wl_list_remove(&shsurf->surface->link);
-	wl_list_insert(&gShell.pEC->surface_list, &shsurf->surface->link);
+	wl_list_insert(&gBE.base.surface_list, &shsurf->surface->link);
 	
 //	weston_compositor_damage_all(gShell.pEC);
 }
@@ -4282,7 +4500,6 @@ tWin*		Shell_get_surface			(struct wl_client *client, tSurf *surface)
 /** ***********************************  shell other ************************************ **/
 
 
-/* no-op func for checking black surface */
 static void	black_surface_configure			(tSurf *es, int32_t sx, int32_t sy)
 {
 }
@@ -4327,7 +4544,7 @@ static void	lock					(struct wl_listener *listener, void *data)
 	tOutput *output;
 
 	if (gShell.locked) {
-		wl_list_for_each(output, &gShell.pEC->output_list, link)
+		wl_list_for_each(output, &gBE.base.output_list, link)
 			/* TODO: find a way to jump to other DPMS levels */
 			if (output->set_dpms)
 				output->set_dpms(output, WESTON_DPMS_STANDBY);
@@ -4343,19 +4560,19 @@ static void	lock					(struct wl_listener *listener, void *data)
 //	wl_list_remove(&gShell.panel_layer.link);
 //	wl_list_remove(&gShell.toplevel_layer.link);
 //	wl_list_remove(&gShell.fullscreen_layer.link);
-//	wl_list_insert(&gShell.pEC->cursor_layer.link, &gShell.lock_layer.link);
+//	wl_list_insert(&gBE.base.cursor_layer.link, &gShell.lock_layer.link);
 	
 /*	if (!wl_list_empty(&gShell.screensaver.surfaces)) {
-		gShell.pEC->idle_time = gShell.screensaver.duration;
+		gBE.base.idle_time = gShell.screensaver.duration;
 		weston_compositor_wake(gShell.pEC);
-		gShell.pEC->state = WESTON_COMPOSITOR_IDLE;
+		gBE.base.state = WESTON_COMPOSITOR_IDLE;
 	}*/
 
 	/* reset pointer foci */
 	weston_compositor_schedule_repaint(gShell.pEC);
 
 	/* reset keyboard foci */
-	wl_list_for_each(device, &gShell.pEC->input_device_list, link) {
+	wl_list_for_each(device, &gBE.base.input_device_list, link) {
 		wl_input_device_set_keyboard_focus(&device->input_device,
 						   NULL);
 	}
@@ -4641,7 +4858,7 @@ void		Win_LSet				(tWin* shsurf, uint8_t l)
 
 static void		Act_Client_TagSet		(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
 {
-	tSurf* surf = gShell.pEC->input_device->current;
+	tSurf* surf = gBE.base.input_device->current;
 	printf ("Act_Client_TagSet surf %lx\n", surf);
 	if (!surf)
 		return;
@@ -4654,7 +4871,7 @@ static void		Act_Client_TagSet		(struct wl_input_device *device, uint32_t time, 
 
 static void		Act_Client_Unfloat		(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
 {
-	tSurf* surf = gShell.pEC->input_device->current;
+	tSurf* surf = gBE.base.input_device->current;
 	if (!surf)
 		return;
 	tWin* shsurf = get_shell_surface(surf);
@@ -4664,7 +4881,7 @@ static void		Act_Client_Unfloat		(struct wl_input_device *device, uint32_t time,
 
 static void		Act_Output_TagSet		(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
 {
-	tSurf* surf = gShell.pEC->input_device->current;
+	tSurf* surf = gBE.base.input_device->current;
 	tOutput* out = CurrentOutput();
 	
 	Output_TagView (out, data);
@@ -4674,20 +4891,20 @@ static void		Act_Output_TagSet		(struct wl_input_device *device, uint32_t time, 
 
 static void		Act_Surf_Teleport		(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
 {
-	tSurf* surf = gShell.pEC->input_device->current;
+	tSurf* surf = gBE.base.input_device->current;
 	if (!surf)
 		return;
 	tWin* shsurf = get_shell_surface(surf);
 	struct wl_list* list;
 	if ((int)data > 0) {
 		list = surf->output->link.next;
-		if (list == &gShell.pEC->output_list) {
-			list = gShell.pEC->output_list.next;
+		if (list == &gBE.base.output_list) {
+			list = gBE.base.output_list.next;
 		}
 	}else {
 		list = surf->output->link.prev;
-		if (list == &gShell.pEC->output_list) {
-			list = gShell.pEC->output_list.prev;
+		if (list == &gBE.base.output_list) {
+			list = gBE.base.output_list.prev;
 		}
 	}
 	tOutput* tgt = container_of(list, tOutput, link);
@@ -4818,7 +5035,7 @@ void		shell_restack		()
 	
 //	shell_L_print (&gShell);
 	
-	wl_list_for_each(output, &gShell.pEC->output_list, link) {
+	wl_list_for_each(output, &gBE.base.output_list, link) {
 	/*	printf("\noutput TAG: %lx\n", output->Tags);
 		printf("xy %d %d	wh %d %d\n",
 			output->region.extents.x1,
@@ -4831,20 +5048,20 @@ void		shell_restack		()
 	}
 //	printf("\n");
 	
-	wl_list_init(&gShell.pEC->surface_list);
+	wl_list_init(&gBE.base.surface_list);
 	
 	wl_list_for_each(shsurf, &gShell.L[L_eNorm], L_link) {
 		if (shsurf->type == SHELL_SURFACE_BACKGROUND
 			|| shsurf->type == SHELL_SURFACE_PANEL
 		) {
 		//	printf("surf TAG: %x\n", shsurf->Tags);
-			wl_list_insert(&gShell.pEC->surface_list, &shsurf->surface->link);
+			wl_list_insert(&gBE.base.surface_list, &shsurf->surface->link);
 		}
 	}
 	int i;
 	for (i = 0; i < L_NUM; ++i) {
 		wl_list_for_each(shsurf, &gShell.L[i], L_link) {
-			wl_list_for_each(output, &gShell.pEC->output_list, link) {
+			wl_list_for_each(output, &gBE.base.output_list, link) {
 				if (shsurf->type == SHELL_SURFACE_BACKGROUND
 					|| shsurf->type == SHELL_SURFACE_PANEL
 				)
@@ -4852,7 +5069,7 @@ void		shell_restack		()
 				if (shsurf->Tags & output->Tags) {
 				//	printf("surf TAG: %x\n", shsurf->Tags);
 				//	shsurf->output = output;
-					wl_list_insert(&gShell.pEC->surface_list, &shsurf->surface->link);
+					wl_list_insert(&gBE.base.surface_list, &shsurf->surface->link);
 					if (i == L_eNorm)
 						wl_list_insert(&output->surfaces, &shsurf->O_link);
 					break;
@@ -4862,12 +5079,12 @@ void		shell_restack		()
 	}
 	
 	tFocus* wid;
-/*	wl_list_for_each(wid, &gShell.pEC->input_device_list, link) {
+/*	wl_list_for_each(wid, &gBE.base.input_device_list, link) {
 		printf ("wid %lx\n", wid);
-		wl_list_insert(&gShell.pEC->surface_list, &wid->sprite->link);
+		wl_list_insert(&gBE.base.surface_list, &wid->sprite->link);
 	//	weston_surface_assign_output(wid->sprite);
 	}*/
-	wl_list_for_each(output, &gShell.pEC->output_list, link) {
+	wl_list_for_each(output, &gBE.base.output_list, link) {
 		layout(output);
 	}
 	

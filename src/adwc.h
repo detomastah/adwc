@@ -71,7 +71,14 @@ typedef struct weston_input_device		tFocus;
 typedef struct weston_surface			tSurf;
 typedef struct shell_surface			tWin;
 
-
+/*
+typedef struct
+{
+	struct wl_buffer* pWLBuffer;
+	EGLImageKHR image;
+	GLuint texture;
+	
+}tBufferPtr;*/
 
 
 typedef void (*weston_process_cleanup_func_t)(struct weston_process *process,
@@ -79,12 +86,6 @@ typedef void (*weston_process_cleanup_func_t)(struct weston_process *process,
 struct weston_process {
 	pid_t pid;
 	weston_process_cleanup_func_t cleanup;
-	struct wl_list link;
-};
-
-
-struct weston_transform {
-	struct weston_matrix matrix;
 	struct wl_list link;
 };
 
@@ -243,10 +244,12 @@ struct weston_compositor
 	struct wl_event_loop *input_loop;
 	struct wl_event_source *input_loop_source;
 	
+	int32_t MinX, MinY, MaxX, MaxY;
+	struct wl_list output_list;
+	
+	
 	/* There can be more than one, but not right now... */
 	struct wl_input_device *input_device;
-	
-	struct wl_list output_list;
 	struct wl_list input_device_list;
 	
 	struct wl_list surface_list;	//list of what the backend draws?
@@ -743,6 +746,12 @@ tWin*		Shell_get_surface	(struct wl_client *client, tSurf *surface);
 tOutput*		CurrentOutput		();
 
 void		Win_LSet			(tWin* shsurf, uint8_t l);
+
+
+#define dDPrint(fmt,...)		fprintf (stderr, "%s:	" fmt "\n", __FUNCTION__,##__VA_ARGS__)
+#define dDExpr(_letter,_expr)	fprintf (stderr, "%s:	" #_expr " =	%" #_letter "\n", __FUNCTION__, _expr)
+
+
 
 #endif
 
