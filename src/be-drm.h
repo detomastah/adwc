@@ -96,7 +96,7 @@ struct be_sprite {
 	uint32_t formats[];
 };
 
-export struct be_compositor gBE;
+extern struct be_compositor gBE;
 
 #endif
 
