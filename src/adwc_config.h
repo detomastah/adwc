@@ -1,6 +1,6 @@
 
-#define dWayland_WithPosition		0
-#define dWayland_WithGlobalTransient	0
+#define dWayland_WithPosition		1
+#define dWayland_WithGlobalTransient	1
 
 #define dXWayland_Mode	0
 

@@ -5,9 +5,12 @@ Makefile.in
 .deps
 .libs
 
+*~
 *.o
 *.lo
 *.la
+
+*.avi
 
 /libtool
 /config*

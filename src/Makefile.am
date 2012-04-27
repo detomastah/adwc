@@ -9,9 +9,9 @@ AM_CPPFLAGS =					\
 	$(COMPOSITOR_CFLAGS)
 
 weston_LDFLAGS = -export-dynamic
-weston_CFLAGS = $(GCC_CFLAGS)
+weston_CFLAGS = $(GCC_CFLAGS) $(DRM_COMPOSITOR_CFLAGS) $(GCC_CFLAGS)
 weston_LDADD =								\
-	$(COMPOSITOR_LIBS) $(DLOPEN_LIBS) -lm ../shared/libconfig-parser.la 
+	$(COMPOSITOR_LIBS) $(DLOPEN_LIBS) $(DRM_COMPOSITOR_LIBS) -lm ../shared/libconfig-parser.la 
 
 weston_SOURCES =			\
 	adwc.c				\
@@ -28,7 +28,16 @@ weston_SOURCES =			\
 	matrix.h				\
 	weston-launch.h			\
 	hash.c					\
-	hash.h
+	hash.h				\
+	be-drm.c			\
+	tty.c					\
+	evdev.c					\
+	evdev.h					\
+	launcher-util.c				\
+	launcher-util.h				\
+	libbacklight.c				\
+	libbacklight.h
+
 
 if BUILD_WESTON_LAUNCH
 weston_launch = weston-launch

@@ -154,16 +154,15 @@ struct weston_output
 	struct weston_mode *current;
 	struct wl_list mode_list;
 
-	void (*repaint)(tOutput *output,
-			pixman_region32_t *damage);
-	void (*destroy)(tOutput *output);
-	void (*assign_planes)(tOutput *output);
-	void (*read_pixels)(tOutput *output, void *data);
+	void	(*repaint)		(tOutput *output, pixman_region32_t *damage);
+	void	(*destroy)		(tOutput *output);
+	void	(*assign_planes)		(tOutput *output);
+	void	(*read_pixels)		(tOutput *output, void *data);
 
 	/* backlight values are on 0-255 range, where higher is brighter */
 	uint32_t backlight_current;
-	void (*set_backlight)(tOutput *output, uint32_t value);
-	void (*set_dpms)(tOutput *output, enum dpms_enum level);
+	void	(*set_backlight)		(tOutput *output, uint32_t value);
+	void	(*set_dpms)		(tOutput *output, enum dpms_enum level);
 	
 	tOutput_Rotation	Rotation;
 	
@@ -185,13 +184,13 @@ struct weston_input_device
 	int hw_cursor;
 	struct wl_surface *saved_kbd_focus;
 	struct wl_listener saved_kbd_focus_listener;
-
+	
 	uint32_t num_tp;
 	struct wl_surface *touch_focus;
 	struct wl_listener touch_focus_listener;
 	struct wl_resource *touch_focus_resource;
 	struct wl_listener touch_focus_resource_listener;
-
+	
 	struct wl_listener new_drag_icon_listener;
 };
 
@@ -266,17 +265,16 @@ struct weston_compositor
 	
 	uint32_t focus;
 	
-	PFNGLEGLIMAGETARGETRENDERBUFFERSTORAGEOESPROC
-		image_target_renderbuffer_storage;
-	PFNGLEGLIMAGETARGETTEXTURE2DOESPROC image_target_texture_2d;
-	PFNEGLCREATEIMAGEKHRPROC create_image;
-	PFNEGLDESTROYIMAGEKHRPROC destroy_image;
-	PFNEGLBINDWAYLANDDISPLAYWL bind_display;
-	PFNEGLUNBINDWAYLANDDISPLAYWL unbind_display;
+	PFNGLEGLIMAGETARGETRENDERBUFFERSTORAGEOESPROC	image_target_renderbuffer_storage;
+	PFNGLEGLIMAGETARGETTEXTURE2DOESPROC		image_target_texture_2d;
+	PFNEGLCREATEIMAGEKHRPROC				create_image;
+	PFNEGLDESTROYIMAGEKHRPROC			destroy_image;
+	PFNEGLBINDWAYLANDDISPLAYWL			bind_display;
+	PFNEGLUNBINDWAYLANDDISPLAYWL			unbind_display;
 	int has_bind_display;
 	
-	void (*destroy)(tComp *ec);
-	int (*authenticate)(tComp *c, uint32_t id);
+	void	(*destroy)	(tComp *ec);
+	int	(*authenticate)	(tComp *c, uint32_t id);
 	
 	struct screenshooter *screenshooter;
 	int launcher_sock;
@@ -311,8 +309,6 @@ struct weston_surface
 	pixman_region32_t input;
 	int32_t pitch;
 	struct wl_list link;
-	
-//	struct wl_list layer_link;
 	
 	struct weston_shader *shader;
 	GLfloat color[4];
@@ -484,7 +480,8 @@ typedef void (*weston_binding_handler_t)(struct wl_input_device *device,
 					 uint32_t axis,
 					 int32_t state, void *data);
 
-typedef struct {
+typedef struct
+{
 	uint32_t Key, Button, Axis, Mods;
 	weston_binding_handler_t Handler;
 	uintptr_t Priv;
@@ -492,11 +489,13 @@ typedef struct {
 
 
 
-struct xserver {
+struct xserver
+{
 	struct wl_resource resource;
 };
 
-struct weston_xserver {
+struct weston_xserver
+{
 	struct wl_display *wl_display;
 	struct wl_event_loop *loop;
 	struct wl_event_source *sigchld_source;
@@ -515,6 +514,7 @@ struct weston_xserver {
 };
 
 
+#include <be-drm.h>
 
 
 void				Surf_input_regionSet				(tSurf *psurf, int32_t x, int32_t y, int32_t width, int32_t height);
@@ -721,8 +721,7 @@ weston_surface_set_color(tSurf *surface,
 void
 weston_surface_destroy(tSurf *surface);
 
-tComp *
-backend_init(struct wl_display *display, int argc, char *argv[]);
+tComp *		backend_init		(struct wl_display *display, int argc, char *argv[]);
 
 
 
@@ -739,12 +738,11 @@ shell_get_shell_surface(struct wl_client *client,
 			uint32_t id,
 			struct wl_resource *surface_resource);
 
-tWin*
-Shell_get_surface(struct wl_client *client, tSurf *surface);
+tWin*		Shell_get_surface	(struct wl_client *client, tSurf *surface);
 
-tOutput*	CurrentOutput	();
+tOutput*		CurrentOutput		();
 
-void	Win_LSet		(tWin* shsurf, uint8_t l);
+void		Win_LSet			(tWin* shsurf, uint8_t l);
 
 #endif
 

@@ -62,6 +62,8 @@ static struct wl_list child_process_list;
 static jmp_buf segv_jmp_buf;
 
 struct weston_xserver *gpXServer;
+struct wl_shell gShell;
+
 
 typedef struct {
 	unsigned long sec, nsec;
@@ -121,8 +123,7 @@ static inline double	SC_time_Diff	(tSC_time* pt)
 
 
 
-static int
-sigchld_handler(int signal_number, void *data)
+static int			sigchld_handler			(int signal_number, void *data)
 {
 	struct weston_process *p;
 	int status;
@@ -148,14 +149,12 @@ sigchld_handler(int signal_number, void *data)
 	return 1;
 }
 
-WL_EXPORT void
-weston_watch_process(struct weston_process *process)
+WL_EXPORT void			weston_watch_process		(struct weston_process *process)
 {
 	wl_list_insert(&child_process_list, &process->link);
 }
 
-static void
-child_client_exec(int sockfd, const char *path)
+static void			child_client_exec		(int sockfd, const char *path)
 {
 	int clientfd;
 	char s[32];
@@ -184,11 +183,10 @@ child_client_exec(int sockfd, const char *path)
 			path);
 }
 
-WL_EXPORT struct wl_client *
-weston_client_launch(tComp *compositor,
-			struct weston_process *proc,
-			const char *path,
-			weston_process_cleanup_func_t cleanup)
+WL_EXPORT struct wl_client *	weston_client_launch		(tComp *compositor,
+								struct weston_process *proc,
+								const char *path,
+								weston_process_cleanup_func_t cleanup)
 {
 	int sv[2];
 	pid_t pid;
@@ -233,33 +231,26 @@ weston_client_launch(tComp *compositor,
 	return client;
 }
 
-static void
-surface_handle_buffer_destroy(struct wl_listener *listener, void *data)
+static void		surface_handle_buffer_destroy		(struct wl_listener *listener, void *data)
 {
-	tSurf *es =
-		container_of(listener, tSurf, 
-			     buffer_destroy_listener);
-
+	tSurf *es = container_of(listener, tSurf, buffer_destroy_listener);
 	es->buffer = NULL;
 }
 
 static const pixman_region32_data_t undef_region_data;
 
-static void
-undef_region(pixman_region32_t *region)
+static void		undef_region				(pixman_region32_t *region)
 {
 	pixman_region32_fini(region);
 	region->data = (pixman_region32_data_t *) &undef_region_data;
 }
 
-static int
-region_is_undefined(pixman_region32_t *region)
+static int		region_is_undefined			(pixman_region32_t *region)
 {
 	return region->data == &undef_region_data;
 }
 
-static void
-empty_region(pixman_region32_t *region)
+static void		empty_region				(pixman_region32_t *region)
 {
 	if (!region_is_undefined(region))
 		pixman_region32_fini(region);
@@ -268,7 +259,7 @@ empty_region(pixman_region32_t *region)
 }
 
 
-WL_EXPORT uint32_t	weston_compositor_get_time			(void)
+WL_EXPORT uint32_t	weston_compositor_get_time		(void)
 {
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
@@ -282,6 +273,115 @@ tWin *			get_shell_surface			(tSurf *surface);
 static void		handle_drag_surface_destroy		(struct wl_listener *listener, void *data);
 static void		device_handle_new_drag_icon		(struct wl_listener *listener, void *data);
 
+
+
+/** *********************************** NEW ************************************ **/
+
+/** *********************************** GLOBAL ************************************ **/
+
+tOutput*		CurrentOutput		()
+{
+	if (gShell.pEC->input_device
+		&& ((tFocus*) gShell.pEC->input_device)->sprite
+		&& ((tFocus*) gShell.pEC->input_device)->sprite->output
+	)
+		return ((tFocus*) gShell.pEC->input_device)->sprite->output;
+	
+	return container_of(&gShell.pEC->output_list, tOutput, link);
+}
+
+
+bool		Tag_isVisible		(tTags tags)
+{
+	tOutput *iout;
+	wl_list_for_each(iout, &gShell.pEC->output_list, link) {
+		if (iout->Tags & tags) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+Bool		Tag_isVisibleOnOther	(tTags tags, tOutput *output)
+{
+	tOutput *iout;
+	wl_list_for_each(iout, &gShell.pEC->output_list, link) {
+		if (iout == output)
+			continue;
+		if (iout->Tags & tags) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+
+
+/** *********************************** Output ************************************ **/
+
+
+bool		Output_TagisVisible		(tOutput *out, tTags tags)
+{
+	if (out->Tags & tags)
+		return 1;
+	return 0;
+}
+
+void		Output_TagSet			(tOutput *out, tTags tags)
+{
+	out->Tags = tags;
+	
+	tOutput *iout;
+	int i = 0;
+	wl_list_for_each(iout, &gShell.pEC->output_list, link) {
+		if (iout == out)
+			break;
+		i++;
+	}
+	desktop_shell_send_select_tag(gShell.child.desktop_shell, i, out->Tags);
+	gShell.prepare_event_sent = true;
+}
+
+void		Output_TagView			(tOutput *out, tTags newtag)
+{
+	tOutput *iout;
+	wl_list_for_each(iout, &gShell.pEC->output_list, link) {
+		
+		if (iout != out && Output_TagisVisible (iout, newtag)) {
+			Output_TagSet (iout, out->Tags);
+			Output_TagSet (out, newtag);
+			
+			shell_restack();
+		//	arrange (iout);
+		//	arrange (curout);
+			
+		//	Queue_DrawBar (iout);
+		//	Queue_DrawBar (selmon);
+			return;
+		}
+	}
+	if (newtag) {
+		Output_TagSet (out, newtag);
+	}
+	shell_restack();
+//	arrange (curout);
+	
+//	Queue_DrawBar (curout);
+}
+
+
+
+tWin*		Output_PanelGet			(tOutput *output)
+{
+	tWin *priv;
+	
+	wl_list_for_each(priv, &gShell.panels, link) {
+		if (priv->output == output) {
+			return priv;
+		}
+	}
+	return 0;
+}
 
 
 
@@ -2485,10 +2585,8 @@ on_segv_signal(int s, siginfo_t *siginfo, void *context)
 
 /** *********************************** shell ************************************ **/
 
-struct wl_shell gShell;
 
-static void
-destroy_shell_grab_shsurf(struct wl_listener *listener, void *data)
+static void		destroy_shell_grab_shsurf		(struct wl_listener *listener, void *data)
 {
 	struct shell_grab *grab;
 
@@ -2498,10 +2596,9 @@ destroy_shell_grab_shsurf(struct wl_listener *listener, void *data)
 	grab->shsurf = NULL;
 }
 
-static void
-shell_grab_init(struct shell_grab *grab,
-		const struct wl_pointer_grab_interface *interface,
-		tWin *shsurf)
+static void		shell_grab_init				(struct shell_grab *grab,
+								const struct wl_pointer_grab_interface *interface,
+								tWin *shsurf)
 {
 	grab->grab.interface = interface;
 	grab->shsurf = shsurf;
@@ -2511,31 +2608,24 @@ shell_grab_init(struct shell_grab *grab,
 
 }
 
-static void
-shell_grab_finish(struct shell_grab *grab)
+static void		shell_grab_finish			(struct shell_grab *grab)
 {
 	wl_list_remove(&grab->shsurf_destroy_listener.link);
 }
 
-static void
-center_on_output(tSurf *surface,
-		 tOutput *output);
+static void		center_on_output				(tSurf *surface, tOutput *output);
 
-tWin*		get_shell_surface			(tSurf *surface);
+tWin*			get_shell_surface			(tSurf *surface);
 
 
 /** *********************************** shell grabs manipulation ************************************ **/
 
-static void
-noop_grab_focus(struct wl_pointer_grab *grab,
-		struct wl_surface *surface, int32_t x, int32_t y)
+static void		noop_grab_focus				(struct wl_pointer_grab *grab, struct wl_surface *surface, int32_t x, int32_t y)
 {
 	grab->focus = NULL;
 }
 
-static void
-move_grab_motion(struct wl_pointer_grab *grab,
-		 uint32_t time, int32_t x, int32_t y)
+static void		move_grab_motion				(struct wl_pointer_grab *grab, uint32_t time, int32_t x, int32_t y)
 {
 	struct weston_move_grab *move = (struct weston_move_grab *) grab;
 	struct wl_input_device *device = grab->input_device;
@@ -2562,9 +2652,7 @@ move_grab_motion(struct wl_pointer_grab *grab,
 	
 }
 
-static void
-move_grab_button(struct wl_pointer_grab *grab,
-		 uint32_t time, uint32_t button, int32_t state)
+static void		move_grab_button				(struct wl_pointer_grab *grab, uint32_t time, uint32_t button, int32_t state)
 {
 	struct shell_grab *shell_grab = container_of(grab, struct shell_grab,
 						    grab);
@@ -2583,9 +2671,7 @@ static const struct wl_pointer_grab_interface move_grab_interface = {
 	move_grab_button,
 };
 
-static int
-weston_surface_move(tSurf *es,
-		    tFocus *wd)
+static int		weston_surface_move			(tSurf *es, tFocus *wd)
 {
 	struct weston_move_grab *move;
 	tWin *shsurf = get_shell_surface(es);
@@ -2610,9 +2696,7 @@ weston_surface_move(tSurf *es,
 	return 0;
 }
 
-static void
-shell_surface_move(struct wl_client *client, struct wl_resource *resource,
-		   struct wl_resource *input_resource, uint32_t serial)
+static void		shell_surface_move			(struct wl_client *client, struct wl_resource *resource, struct wl_resource *input_resource, uint32_t serial)
 {
 	tFocus *wd = input_resource->data;
 	tWin *shsurf = resource->data;
@@ -2626,15 +2710,14 @@ shell_surface_move(struct wl_client *client, struct wl_resource *resource,
 		wl_resource_post_no_memory(resource);
 }
 
+
 struct weston_resize_grab {
 	struct shell_grab base;
 	uint32_t edges;
 	int32_t width, height;
 };
 
-static void
-resize_grab_motion(struct wl_pointer_grab *grab,
-		   uint32_t time, int32_t x, int32_t y)
+static void		resize_grab_motion			(struct wl_pointer_grab *grab, uint32_t time, int32_t x, int32_t y)
 {
 	struct weston_resize_grab *resize = (struct weston_resize_grab *) grab;
 	struct wl_input_device *device = grab->input_device;
@@ -2679,9 +2762,7 @@ resize_grab_motion(struct wl_pointer_grab *grab,
 //	}
 }
 
-static void
-resize_grab_button(struct wl_pointer_grab *grab,
-		   uint32_t time, uint32_t button, int32_t state)
+static void		resize_grab_button			(struct wl_pointer_grab *grab, uint32_t time, uint32_t button, int32_t state)
 {
 	struct weston_resize_grab *resize = (struct weston_resize_grab *) grab;
 	struct wl_input_device *device = grab->input_device;
@@ -2699,9 +2780,7 @@ static const struct wl_pointer_grab_interface resize_grab_interface = {
 	resize_grab_button,
 };
 
-static int
-weston_surface_resize(tWin *shsurf,
-		      tFocus *wd, uint32_t edges)
+static int		weston_surface_resize			(tWin *shsurf, tFocus *wd, uint32_t edges)
 {
 	struct weston_resize_grab *resize;
 
@@ -2730,10 +2809,9 @@ weston_surface_resize(tWin *shsurf,
 	return 0;
 }
 
-static void
-shell_surface_resize(struct wl_client *client, struct wl_resource *resource,
-		     struct wl_resource *input_resource, uint32_t serial,
-		     uint32_t edges)
+static void		shell_surface_resize			(struct wl_client *client, struct wl_resource *resource,
+								struct wl_resource *input_resource, uint32_t serial,
+								uint32_t edges)
 {
 	tFocus *wd = input_resource->data;
 	tWin *shsurf = resource->data;
@@ -2753,9 +2831,7 @@ shell_surface_resize(struct wl_client *client, struct wl_resource *resource,
 
 
 
-static void
-swap_grab_motion(struct wl_pointer_grab *grab,
-		 uint32_t time, int32_t x, int32_t y)
+static void		swap_grab_motion				(struct wl_pointer_grab *grab, uint32_t time, int32_t x, int32_t y)
 {
 //	dTrace_E ("xy %d %d\n", x, y);
 	struct weston_swap_grab *move = (struct weston_swap_grab *) grab;
@@ -2838,9 +2914,7 @@ swap_grab_motion(struct wl_pointer_grab *grab,
 //				 es->geometry.width, es->geometry.height);
 }
 
-static void
-swap_grab_button(struct wl_pointer_grab *grab,
-		 uint32_t time, uint32_t button, int32_t state)
+static void		swap_grab_button				(struct wl_pointer_grab *grab, uint32_t time, uint32_t button, int32_t state)
 {
 	struct shell_grab *shell_grab = container_of(grab, struct shell_grab,
 						    grab);
@@ -2859,9 +2933,7 @@ static const struct wl_pointer_grab_interface swap_grab_interface = {
 	swap_grab_button,
 };
 
-static int
-weston_surface_swap(tSurf *es,
-		    tFocus *wd)
+static int		weston_surface_swap			(tSurf *es, tFocus *wd)
 {
 	struct weston_swap_grab *move;
 	tWin *shsurf = get_shell_surface(es);
@@ -2988,8 +3060,7 @@ void			shell_surface_set_transient			(struct wl_client *client,
 }
 
 
-static int
-get_output_panel_height(struct wl_shell *wlshell,tOutput *output)
+static int		get_output_panel_height				(struct wl_shell *wlshell,tOutput *output)
 {
 	tWin *priv;
 	int panel_height = 0;
@@ -3006,10 +3077,9 @@ get_output_panel_height(struct wl_shell *wlshell,tOutput *output)
 	return panel_height;
 }
 
-static void
-shell_surface_set_maximized(struct wl_client *client,
-			    struct wl_resource *resource,
-			    struct wl_resource *output_resource )
+static void		shell_surface_set_maximized			(struct wl_client *client,
+									struct wl_resource *resource,
+									struct wl_resource *output_resource )
 {
 	tWin *shsurf = resource->data;
 	tSurf *es = shsurf->surface;
@@ -3039,13 +3109,9 @@ shell_surface_set_maximized(struct wl_client *client,
 	shsurf->type = SHELL_SURFACE_MAXIMIZED;
 }
 
-static void
-black_surface_configure(tSurf *es, int32_t sx, int32_t sy);
+static void		black_surface_configure				(tSurf *es, int32_t sx, int32_t sy);
 
-static tSurf *
-create_black_surface(tComp *ec,
-		     tSurf *fs_surface,
-		     GLfloat x, GLfloat y, int w, int h)
+static tSurf *		create_black_surface				(tComp *ec, tSurf *fs_surface, GLfloat x, GLfloat y, int w, int h)
 {
 	tSurf *surface = NULL;
 
@@ -3236,12 +3302,12 @@ void			shell_map_popup					(tWin *shsurf, uint32_t serial)
 					   &shsurf->popup.grab);
 }
 
-void			shell_surface_set_popup(struct wl_client *client,
-			struct wl_resource *resource,
-			struct wl_resource *input_device_resource,
-			uint32_t time,
-			struct wl_resource *parent_resource,
-			int32_t x, int32_t y, uint32_t flags)
+void			shell_surface_set_popup				(struct wl_client *client,
+									struct wl_resource *resource,
+									struct wl_resource *input_device_resource,
+									uint32_t time,
+									struct wl_resource *parent_resource,
+									int32_t x, int32_t y, uint32_t flags)
 {
 	tWin *shsurf = resource->data;
 
@@ -3279,7 +3345,7 @@ static const struct wl_shell_surface_interface shell_surface_implementation = {
 	shell_surface_set_maximized
 };
 
-void					destroy_shell_surface			(struct wl_resource *resource)
+void			destroy_shell_surface				(struct wl_resource *resource)
 {
 	tWin *shsurf = resource->data;
 
@@ -3302,7 +3368,7 @@ void					destroy_shell_surface			(struct wl_resource *resource)
 	free(shsurf);
 }
 
-void					shell_handle_surface_destroy		(struct wl_listener *listener, void *data)
+void			shell_handle_surface_destroy			(struct wl_listener *listener, void *data)
 {
 	tWin *shsurf = container_of(listener,
 						    tWin,
@@ -3320,7 +3386,7 @@ void					shell_handle_surface_destroy		(struct wl_listener *listener, void *data
 
 
 
-tWin *		get_shell_surface				(tSurf *surface)
+tWin *			get_shell_surface				(tSurf *surface)
 {
 	struct wl_listener *listener;
 	
@@ -4078,9 +4144,9 @@ void		shell_surface_configure		(tSurf *es, int32_t sx, int32_t sy)
 
 
 void		shell_get_shell_surface		(struct wl_client *client,
-			struct wl_resource *resource,
-			uint32_t id,
-			struct wl_resource *surface_resource)
+						struct wl_resource *resource,
+						uint32_t id,
+						struct wl_resource *surface_resource)
 {
 	dTrace_E("");
 	tSurf *surface = surface_resource->data;
@@ -4217,13 +4283,11 @@ tWin*		Shell_get_surface			(struct wl_client *client, tSurf *surface)
 
 
 /* no-op func for checking black surface */
-static void
-black_surface_configure(tSurf *es, int32_t sx, int32_t sy)
+static void	black_surface_configure			(tSurf *es, int32_t sx, int32_t sy)
 {
 }
 
-static bool 
-is_black_surface (tSurf *es, tSurf **fs_surface)
+static bool 	is_black_surface 			(tSurf *es, tSurf **fs_surface)
 {
 	if (es->configure == black_surface_configure) {
 		if (fs_surface)
@@ -4233,10 +4297,9 @@ is_black_surface (tSurf *es, tSurf **fs_surface)
 	return false;
 }
 
-static void
-click_to_activate_binding(struct wl_input_device *device,
-			  uint32_t time, uint32_t key,
-			  uint32_t button, uint32_t axis, int32_t state, void *data)
+static void	click_to_activate_binding		(struct wl_input_device *device,
+							uint32_t time, uint32_t key,
+							uint32_t button, uint32_t axis, int32_t state, void *data)
 {
 	tFocus *wd = (tFocus *) device;
 	struct wl_shell *shell = data;
@@ -4254,8 +4317,7 @@ click_to_activate_binding(struct wl_input_device *device,
 		activate(shell, focus, wd);
 }
 
-static void
-lock(struct wl_listener *listener, void *data)
+static void	lock					(struct wl_listener *listener, void *data)
 {
 	exit(1);
 	struct wl_shell *shell =
@@ -4303,8 +4365,7 @@ lock(struct wl_listener *listener, void *data)
 	/* All this must be undone in resume_desktop(). */
 }
 
-static void
-unlock(struct wl_listener *listener, void *data)
+static void	unlock					(struct wl_listener *listener, void *data)
 {
 	struct wl_shell *shell =
 		container_of(listener, struct wl_shell, unlock_listener);
@@ -4327,21 +4388,19 @@ unlock(struct wl_listener *listener, void *data)
 	gShell.prepare_event_sent = true;
 }
 
-static void
-center_on_output(tSurf *surface, tOutput *output)
+static void	center_on_output				(tSurf *surface, tOutput *output)
 {
 	struct weston_mode *mode = output->current;
 	GLfloat x = (mode->width - surface->geometry.width) / 2;
 	GLfloat y = (mode->height - surface->geometry.height) / 2;
-
+	
 	weston_surface_set_position(surface, output->x + x, output->y + y);
 }
 
 
-static int launch_desktop_shell_process(struct wl_shell *shell);
+static int	launch_desktop_shell_process		(struct wl_shell *shell);
 
-static void
-desktop_shell_sigchld(struct weston_process *process, int status)
+static void	desktop_shell_sigchld			(struct weston_process *process, int status)
 {
 	uint32_t time;
 	struct wl_shell *shell =
@@ -4367,8 +4426,7 @@ desktop_shell_sigchld(struct weston_process *process, int status)
 	launch_desktop_shell_process(shell);
 }
 
-static int
-launch_desktop_shell_process(struct wl_shell *shell)
+static int	launch_desktop_shell_process		(struct wl_shell *shell)
 {
 	const char *shell_exe = LIBEXECDIR "/weston-desktop-shell";
 
@@ -4450,8 +4508,7 @@ struct switcher {
 	struct wl_keyboard_grab grab;
 };
 
-static void
-switcher_next(struct switcher *switcher)
+static void	switcher_next				(struct switcher *switcher)
 {
 	tComp *compositor = gShell.pEC;
 	tSurf *surface;
@@ -4501,8 +4558,7 @@ switcher_next(struct switcher *switcher)
 		shsurf->fullscreen.black_surface->alpha = 255;
 }
 
-static void
-switcher_handle_surface_destroy(struct wl_listener *listener, void *data)
+static void	switcher_handle_surface_destroy		(struct wl_listener *listener, void *data)
 {
 	struct switcher *switcher =
 		container_of(listener, struct switcher, listener);
@@ -4510,8 +4566,7 @@ switcher_handle_surface_destroy(struct wl_listener *listener, void *data)
 	switcher_next(switcher);
 }
 
-static void
-switcher_destroy(struct switcher *switcher, uint32_t time)
+static void	switcher_destroy				(struct switcher *switcher, uint32_t time)
 {
 	tComp *compositor = gShell.pEC;
 	tSurf *surface;
@@ -4530,9 +4585,8 @@ switcher_destroy(struct switcher *switcher, uint32_t time)
 	free(switcher);
 }
 
-static void
-switcher_key(struct wl_keyboard_grab *grab,
-	     uint32_t time, uint32_t key, int32_t state)
+static void	switcher_key				(struct wl_keyboard_grab *grab,
+							uint32_t time, uint32_t key, int32_t state)
 {
 	struct switcher *switcher = container_of(grab, struct switcher, grab);
 	tFocus *device =
@@ -4549,10 +4603,9 @@ static const struct wl_keyboard_grab_interface switcher_grab = {
 	switcher_key
 };
 
-static void
-switcher_binding(struct wl_input_device *device, uint32_t time,
-		 uint32_t key, uint32_t button, uint32_t axis,
-		 int32_t state, void *data)
+static void	switcher_binding				(struct wl_input_device *device, uint32_t time,
+							uint32_t key, uint32_t button, uint32_t axis,
+							int32_t state, void *data)
 {
 	struct switcher *switcher;
 
@@ -4569,120 +4622,10 @@ switcher_binding(struct wl_input_device *device, uint32_t time,
 
 
 
-/** *********************************** NEW ************************************ **/
-
-/** *********************************** GLOBAL ************************************ **/
-
-tOutput*	CurrentOutput	()
-{
-	if (gShell.pEC->input_device
-		&& ((tFocus*) gShell.pEC->input_device)->sprite
-		&& ((tFocus*) gShell.pEC->input_device)->sprite->output
-	)
-		return ((tFocus*) gShell.pEC->input_device)->sprite->output;
-	
-	return container_of(&gShell.pEC->output_list, tOutput, link);
-}
-
-
-bool		Tag_isVisible		(tTags tags)
-{
-	tOutput *iout;
-	wl_list_for_each(iout, &gShell.pEC->output_list, link) {
-		if (iout->Tags & tags) {
-			return 1;
-		}
-	}
-	return 0;
-}
-
-Bool		Tag_isVisibleOnOther	(tTags tags, tOutput *output)
-{
-	tOutput *iout;
-	wl_list_for_each(iout, &gShell.pEC->output_list, link) {
-		if (iout == output)
-			continue;
-		if (iout->Tags & tags) {
-			return 1;
-		}
-	}
-	return 0;
-}
-
-
-
-/** *********************************** Output ************************************ **/
-
-
-bool		Output_TagisVisible		(tOutput *out, tTags tags)
-{
-	if (out->Tags & tags)
-		return 1;
-	return 0;
-}
-
-void		Output_TagSet			(tOutput *out, tTags tags)
-{
-	out->Tags = tags;
-	
-	tOutput *iout;
-	int i = 0;
-	wl_list_for_each(iout, &gShell.pEC->output_list, link) {
-		if (iout == out)
-			break;
-		i++;
-	}
-	desktop_shell_send_select_tag(gShell.child.desktop_shell, i, out->Tags);
-	gShell.prepare_event_sent = true;
-}
-
-void		Output_TagView			(tOutput *out, tTags newtag)
-{
-	tOutput *iout;
-	wl_list_for_each(iout, &gShell.pEC->output_list, link) {
-		
-		if (iout != out && Output_TagisVisible (iout, newtag)) {
-			Output_TagSet (iout, out->Tags);
-			Output_TagSet (out, newtag);
-			
-			shell_restack();
-		//	arrange (iout);
-		//	arrange (curout);
-			
-		//	Queue_DrawBar (iout);
-		//	Queue_DrawBar (selmon);
-			return;
-		}
-	}
-	if (newtag) {
-		Output_TagSet (out, newtag);
-	}
-	shell_restack();
-//	arrange (curout);
-	
-//	Queue_DrawBar (curout);
-}
-
-
-
-tWin*	
-Output_PanelGet		(tOutput *output)
-{
-	tWin *priv;
-	
-	wl_list_for_each(priv, &gShell.panels, link) {
-		if (priv->output == output) {
-			return priv;
-		}
-	}
-	return 0;
-}
-
-
 
 /** *********************************** Win ************************************ **/
 
-void		Win_LSet		(tWin* shsurf, uint8_t l)
+void		Win_LSet				(tWin* shsurf, uint8_t l)
 {
 	if (l == shsurf->L)
 		return;
@@ -4709,7 +4652,7 @@ static void		Act_Client_TagSet		(struct wl_input_device *device, uint32_t time, 
 	
 }
 
-static void		Act_Client_Unfloat	(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
+static void		Act_Client_Unfloat		(struct wl_input_device *device, uint32_t time, uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
 {
 	tSurf* surf = gShell.pEC->input_device->current;
 	if (!surf)
@@ -4778,7 +4721,7 @@ void		shell_L_print		(struct wl_shell *shell)
 }
 
 
-void layout(tOutput* output)
+void		layout			(tOutput* output)
 {
 	int n, cols, rows, cn, rn, i, cx, cy, cw, ch, mw, mh, mx, my;
 	tWin* c;
@@ -4864,7 +4807,7 @@ void layout(tOutput* output)
 	}
 }
 
-void shell_restack()
+void		shell_restack		()
 {
 //	return;
 //	dTrace_E("");
@@ -4932,9 +4875,8 @@ void shell_restack()
 //	dTrace_L("");
 }
 
-static void
-backlight_binding(struct wl_input_device *device, uint32_t time,
-		  uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
+static void	backlight_binding	(struct wl_input_device *device, uint32_t time,
+					uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
 {
 	tComp *compositor = data;
 	tOutput *output;
@@ -4965,9 +4907,8 @@ backlight_binding(struct wl_input_device *device, uint32_t time,
 	output->set_backlight(output, output->backlight_current);
 }
 
-static void
-debug_repaint_binding(struct wl_input_device *device, uint32_t time,
-		      uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
+static void	debug_repaint_binding	(struct wl_input_device *device, uint32_t time,
+					uint32_t key, uint32_t button, uint32_t axis, int32_t state, void *data)
 {
 	struct wl_shell *shell = data;
 	tComp *compositor = gShell.pEC;
@@ -5116,7 +5057,7 @@ static void *		load_module		(const char *name, const char *entrypoint, void **ha
 
 
 
-WL_EXPORT int	shell_init			(tComp *ec)
+WL_EXPORT int		shell_init			(tComp *ec)
 {
 	struct wl_shell *shell = &gShell;
 	
@@ -5135,13 +5076,6 @@ WL_EXPORT int	shell_init			(tComp *ec)
 
 	wl_list_init(&gShell.backgrounds);
 	wl_list_init(&gShell.panels);
-//	wl_list_init(&gShell.screensaver.surfaces);
-	
-//	weston_layer_init(&gShell.fullscreen_layer, &ec->cursor_layer.link);
-//	weston_layer_init(&gShell.panel_layer, &gShell.fullscreen_layer.link);
-//	weston_layer_init(&gShell.toplevel_layer, &gShell.panel_layer.link);
-//	weston_layer_init(&gShell.background_layer, &gShell.toplevel_layer.link);
-//	wl_list_init(&gShell.lock_layer.surface_list);
 	
 	shell_configuration(shell);
 	
@@ -5227,9 +5161,6 @@ WL_EXPORT int	shell_init			(tComp *ec)
 
 
 
-int
-shell_init(tComp *ec);
-
 int			main			(int argc, char *argv[])
 {
 	struct wl_display *display;
@@ -5240,14 +5171,12 @@ int			main			(int argc, char *argv[])
 	void *shell_module, *backend_module, *xserver_module;
 //	int (*shell_init)(tComp *ec);
 	int (*xserver_init)(tComp *ec);
-	tComp
-		*(*backend_init)(struct wl_display *display,
-				 int argc, char *argv[]);
+//	tComp	*(*backend_init)(struct wl_display *display, int argc, char *argv[]);
 	int i;
 	char *backend = NULL;
 	char *shell = NULL;
 	int32_t idle_time = 300;
-	int32_t xserver;
+	int32_t xserver = 0;
 	char *socket_name = NULL;
 	char *config_file;
 
@@ -5289,7 +5218,7 @@ int			main			(int argc, char *argv[])
 	sigemptyset(&segv_action.sa_mask);
 	sigaction(SIGSEGV, &segv_action, NULL);
 
-	if (!backend) {
+/*	if (!backend) {
 		if (getenv("WAYLAND_DISPLAY"))
 			backend = "wayland-backend.so";
 		else if (getenv("DISPLAY"))
@@ -5298,7 +5227,7 @@ int			main			(int argc, char *argv[])
 			backend = "openwfd-backend.so";
 		else
 			backend = "drm-backend.so";
-	}
+	}*/
 
 	config_file = config_file_path("weston.ini");
 	parse_config_file(config_file, cs, ARRAY_LENGTH(cs), shell);
@@ -5307,9 +5236,9 @@ int			main			(int argc, char *argv[])
 //	if (!shell)
 //		shell = "desktop-shell.so";
 
-	backend_init = load_module(backend, "backend_init", &backend_module);
-	if (!backend_init)
-		exit(EXIT_FAILURE);
+//	backend_init = load_module(backend, "backend_init", &backend_module);
+//	if (!backend_init)
+//		exit(EXIT_FAILURE);
 
 //	shell_init = load_module(shell, "shell_init", &shell_module);
 //	if (!shell_init)
