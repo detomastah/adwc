@@ -744,7 +744,7 @@ create_cursor_image(struct gbm_device *gbm,
 	return image;
 }
 
-static int
+int
 be_output_set_cursor(struct weston_output *output_base,
 		      struct weston_input_device *eid)
 {

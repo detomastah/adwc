@@ -100,15 +100,8 @@ struct be_sprite {
 };
 
 extern struct be_compositor gBE;
-<<<<<<< HEAD
-=======
-
-
-
 int		be_output_set_cursor		(struct weston_output *output_base, struct weston_input_device *eid);
 
-
->>>>>>> 29b98d606c2aa382206d95d0e92c2b14679e77e9
 
 #endif
 
