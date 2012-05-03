@@ -45,20 +45,26 @@
 
 struct be_compositor gBE;
 
-static int
-surface_is_primary(struct weston_compositor *ec, struct weston_surface *es)
+/** *********************************** sprite ? ************************************ **/
+static void	sprite_handle_buffer_destroy		(struct wl_listener *listener, void *data)
 {
-	struct weston_surface *primary;
+	struct be_sprite *sprite =
+		container_of(listener, struct be_sprite,
+			     destroy_listener);
 
-	primary = container_of(ec->surface_list.next, struct weston_surface,
-			       link);
-	if (es == primary)
-		return -1;
-	return 0;
+	sprite->surface = NULL;
 }
 
-static int
-be_sprite_crtc_supported(struct weston_output *output_base, uint32_t supported)
+static void	sprite_handle_pending_buffer_destroy	(struct wl_listener *listener, void *data)
+{
+	struct be_sprite *sprite =
+		container_of(listener, struct be_sprite,
+			     pending_destroy_listener);
+
+	sprite->pending_surface = NULL;
+}
+
+static int	be_sprite_crtc_supported			(struct weston_output *output_base, uint32_t supported)
 {
 	struct weston_compositor *ec = output_base->compositor;
 	struct be_compositor *c =(struct be_compositor *) ec;
@@ -76,8 +82,90 @@ be_sprite_crtc_supported(struct weston_output *output_base, uint32_t supported)
 	return 0;
 }
 
-static int
-be_output_prepare_scanout_surface(struct be_output *output)
+
+static void	create_sprites				(struct be_compositor *ec)
+{
+	struct be_sprite *sprite;
+	drmModePlaneRes *plane_res;
+	drmModePlane *plane;
+	uint32_t i;
+
+	plane_res = drmModeGetPlaneResources(ec->drm.fd);
+	if (!plane_res) {
+		fprintf(stderr, "failed to get plane resources: %s\n",
+			strerror(errno));
+		return;
+	}
+	
+	dDExpr (d, plane_res->count_planes);
+	
+	for (i = 0; i < plane_res->count_planes; i++) {
+		plane = drmModeGetPlane(ec->drm.fd, plane_res->planes[i]);
+		if (!plane)
+			continue;
+
+		sprite = malloc(sizeof(*sprite) + ((sizeof(uint32_t)) *
+						   plane->count_formats));
+		if (!sprite) {
+			fprintf(stderr, "%s: out of memory\n", __func__);
+			free(plane);
+			continue;
+		}
+		
+		memset(sprite, 0, sizeof *sprite);
+		
+		sprite->possible_crtcs = plane->possible_crtcs;
+		sprite->plane_id = plane->plane_id;
+		sprite->surface = NULL;
+		sprite->pending_surface = NULL;
+		sprite->fb_id = 0;
+		sprite->pending_fb_id = 0;
+		sprite->destroy_listener.notify = sprite_handle_buffer_destroy;
+		sprite->pending_destroy_listener.notify = sprite_handle_pending_buffer_destroy;
+		sprite->compositor = ec;
+		sprite->count_formats = plane->count_formats;
+		memcpy(sprite->formats, plane->formats, plane->count_formats * sizeof(plane->formats[0]));
+		drmModeFreePlane(plane);
+
+		wl_list_insert(&ec->sprite_list, &sprite->link);
+	}
+
+	free(plane_res->planes);
+	free(plane_res);
+}
+
+static void	destroy_sprites				(struct be_compositor *compositor)
+{
+	struct be_sprite *sprite, *next;
+	struct be_output *output;
+
+	output = container_of(compositor->base.output_list.next,
+			      struct be_output, base.link);
+
+	wl_list_for_each_safe(sprite, next, &compositor->sprite_list, link) {
+		drmModeSetPlane(compositor->drm.fd,
+				sprite->plane_id,
+				output->crtc_id, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0);
+		drmModeRmFB(compositor->drm.fd, sprite->fb_id);
+		free(sprite);
+	}
+}
+
+
+static int	surface_is_primary			(struct weston_compositor *ec, struct weston_surface *es)
+{
+	struct weston_surface *primary;
+
+	primary = container_of(ec->surface_list.next, struct weston_surface,
+			       link);
+	if (es == primary)
+		return -1;
+	return 0;
+}
+
+
+static int	be_output_prepare_scanout_surface		(struct be_output *output)
 {
 	struct be_compositor *c =
 		(struct be_compositor *) output->base.compositor;
@@ -116,8 +204,7 @@ be_output_prepare_scanout_surface(struct be_output *output)
 	return 0;
 }
 
-static void
-be_output_render(struct be_output *output, pixman_region32_t *damage)
+static void	be_output_render				(struct be_output *output, pixman_region32_t *damage)
 {
 	struct be_compositor *compositor =
 		(struct be_compositor *) output->base.compositor;
@@ -146,9 +233,7 @@ be_output_render(struct be_output *output, pixman_region32_t *damage)
 	}
 }
 
-static void
-be_output_repaint(struct weston_output *output_base,
-		   pixman_region32_t *damage)
+static void	be_output_repaint			(struct weston_output *output_base, pixman_region32_t *damage)
 {
 	struct be_output *output = (struct be_output *) output_base;
 	struct be_compositor *compositor =
@@ -287,8 +372,7 @@ page_flip_handler(int fd, unsigned int frame,
 		wl_list_remove(&output->scanout_buffer_destroy_listener.link);
 		output->scanout_buffer = NULL;
 	} else if (output->current_bo) {
-		gbm_surface_release_buffer(output->surface,
-					   output->current_bo);
+		gbm_surface_release_buffer(output->surface, output->current_bo);
 	}
 
 	output->current_bo = output->next_bo;
@@ -389,20 +473,29 @@ be_output_prepare_overlay_surface(struct weston_output *output_base,
 	pixman_box32_t *box;
 	uint32_t format;
 
-	if (c->sprites_are_broken)
+	if (c->sprites_are_broken) {
+		dDPrint ("sprites_are_broken");
 		return -1;
+	}
+	
+	if (surface_is_primary(ec, es)) {
+		dDPrint ("surface_is_primary");
+		return -1;
+	}
 
-	if (surface_is_primary(ec, es))
+	if (es->image == EGL_NO_IMAGE_KHR) {
+		dDPrint ("es->image == EGL_NO_IMAGE_KHR");
 		return -1;
+	}
 
-	if (es->image == EGL_NO_IMAGE_KHR)
+	if (!be_surface_transform_supported(es)) {
+		dDPrint ("!be_surface_transform_supported");
 		return -1;
-
-	if (!be_surface_transform_supported(es))
+	}
+	if (!be_surface_overlap_supported(output_base, overlap)) {
+		dDPrint ("!be_surface_overlap_supported");
 		return -1;
-
-	if (!be_surface_overlap_supported(output_base, overlap))
-		return -1;
+	}
 
 	wl_list_for_each(s, &c->sprite_list, link) {
 		if (!be_sprite_crtc_supported(output_base, s->possible_crtcs))
@@ -415,9 +508,10 @@ be_output_prepare_overlay_surface(struct weston_output *output_base,
 	}
 
 	/* No sprites available */
-	if (!found)
+	if (!found) {
+		dDPrint ("no sprites found");
 		return -1;
-
+	}
 	bo = gbm_bo_create_from_egl_image(c->gbm, c->base.display, es->image,
 					  es->geometry.width, es->geometry.height,
 					  GBM_BO_USE_SCANOUT);
@@ -490,10 +584,7 @@ be_output_prepare_overlay_surface(struct weston_output *output_base,
 	return 0;
 }
 
-static int
-be_output_set_cursor(struct weston_output *output_base,
-		      struct weston_input_device *eid);
-
+#if 0
 static void
 weston_output_set_cursor(struct weston_output *output,
 			 struct weston_input_device *device,
@@ -534,7 +625,7 @@ weston_output_set_cursor(struct weston_output *output,
 		}
 	//	printf ("HAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 2\n");
 		device->hw_cursor = 0;
-	} else {
+	}else {
 	//	printf ("HAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 3\n");
 		if (!prior_was_hardware) {
 		//	printf ("HAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4\n");
@@ -549,6 +640,7 @@ weston_output_set_cursor(struct weston_output *output,
 out:
 	pixman_region32_fini(&cursor_region);
 }
+#endif
 
 static void
 be_assign_planes(struct weston_output *output)
@@ -586,7 +678,7 @@ be_assign_planes(struct weston_output *output)
 							es->geometry.height);
 		pixman_region32_intersect(&surface_overlap, &overlap, &boundingbox);
 		
-		device = (struct weston_input_device *) ec->input_device;
+	/*	device = (struct weston_input_device *) ec->input_device;
 		if (es == device->sprite) {
 			weston_output_set_cursor(output, device, &surface_overlap);
 			
@@ -598,7 +690,7 @@ be_assign_planes(struct weston_output *output)
 								es->geometry.height);
 			if (!device->hw_cursor)
 				pixman_region32_union(&overlap, &overlap, &boundingbox);
-		} else if (!be_output_prepare_overlay_surface(output, es, &surface_overlap)) {
+		} else*/ if (!be_output_prepare_overlay_surface(output, es, &surface_overlap)) {
 			pixman_region32_fini(&es->damage);
 			pixman_region32_init(&es->damage);
 		} else {
@@ -612,7 +704,7 @@ be_assign_planes(struct weston_output *output)
 		}
 		pixman_region32_fini(&surface_overlap);
 	}
-	device = (struct weston_input_device *) ec->input_device;
+/*	device = (struct weston_input_device *) ec->input_device;
 	if (device->sprite) {
 		weston_output_set_cursor(output, device, &surface_overlap);
 		
@@ -624,7 +716,7 @@ be_assign_planes(struct weston_output *output)
 							es->geometry.height);
 		if (!device->hw_cursor)
 			pixman_region32_union(&overlap, &overlap, &boundingbox);
-	}
+	}*/
 	
 	pixman_region32_fini(&overlap);
 
@@ -727,85 +819,6 @@ out:
 	if (ret)
 		drmModeSetCursor(c->drm.fd, output->crtc_id, 0, 0, 0);
 	puts("W1");
-	return ret;
-}
-
-
-static int
-__be_output_set_cursor(struct weston_output *output_base, struct weston_input_device *eid)
-{
-//	printf ("YUUUUUUPI\n");
-	struct be_output *output = (struct be_output *) output_base;
-	struct be_compositor *c = (struct be_compositor *) output->base.compositor;
-	EGLint handle, stride;
-	int ret = -1;
-	struct gbm_bo *bo;
-
-	if (eid == NULL) {
-		drmModeSetCursor(c->drm.fd, output->crtc_id, 0, 0, 0);
-	//	printf ("YUUUUUUPI ret %d\n", 0);
-		return 0;
-	}
-
-	if (eid->sprite->image == EGL_NO_IMAGE_KHR) {
-		eid->sprite->image = gbm_bo_create(c->gbm, 64, 64, GBM_FORMAT_ARGB8888, GBM_BO_USE_CURSOR_64X64);
-	//	bo = gbm_bo_create(c->gbm, 64, 64, GBM_FORMAT_BGRA8888, GBM_BO_USE_CURSOR_64X64);
-	//	printf ("YUUUUUUPI ret eid->sprite->image == EGL_NO_IMAGE_KHR\n");
-	//	goto out;
-	}else {
-		bo = eid->sprite->image;/*
-		if (eid->sprite->geometry.width > 64 ||
-		    eid->sprite->geometry.height > 64) {
-			printf ("YUUUUUUPI ret eid->sprite->geometry.width > 64 || eid->sprite->geometry.height > 64R\n");
-			goto out;
-		}
-		bo = gbm_bo_create_from_egl_image(c->gbm,
-								c->base.display,
-								eid->sprite->image, 64, 64,
-								GBM_BO_USE_CURSOR_64X64);*/
-	}
-	/* Not suitable for hw cursor, fall back */
-	if (bo == NULL) {
-	//	printf ("YUUUUUUPI ret bo == NULL\n");
-		goto out;
-	}
-	handle = gbm_bo_get_handle(bo).s32;
-	stride = gbm_bo_get_pitch(bo);
-
-	/* gbm_bo_create_from_egl_image() didn't always validate the usage
-	 * flags, and in that case we might end up with a bad stride. */
-	if (stride != 64 * 4) {
-	//	printf ("YUUUUUUPI ret stride != 64 * 4\n");
-		goto out;
-	}
-	ret = drmModeSetCursor(c->drm.fd, output->crtc_id, handle, 64, 64);
-//	gbm_bo_destroy(bo);
-	if (ret) {
-		fprintf(stderr, "failed to set cursor: %s\n", strerror(-ret));
-		goto out;
-	}
-	{
-	//	int32_t x = eid->sprite->geometry.x, y = eid->sprite->geometry.y;
-		int32_t x = eid->sprite->geometry.x + eid->hotspot_x, y = eid->sprite->geometry.y + eid->hotspot_y;
-		Output_Focus_CurPosGet (output, eid, &x, &y);
-		if (output_base->Rotation == Output_Rotation_eLeft) {
-		//	y -= eid->sprite->geometry.width - eid->hotspot_x;
-			y -= 64;
-		}
-		ret = drmModeMoveCursor(c->drm.fd, output->crtc_id,
-					x,
-					y);
-	}
-	if (ret) {
-		fprintf(stderr, "failed to move cursor: %s\n", strerror(-ret));
-		goto out;
-	}
-
-out:
-	if (ret)
-		drmModeSetCursor(c->drm.fd, output->crtc_id, 0, 0, 0);
-	
-//	printf ("YUUUUUUPI ret %d\n", ret);
 	return ret;
 }
 
@@ -1025,25 +1038,8 @@ output_handle_pending_scanout_buffer_destroy(struct wl_listener *listener,
 	weston_compositor_schedule_repaint(output->base.compositor);
 }
 
-static void
-sprite_handle_buffer_destroy(struct wl_listener *listener, void *data)
-{
-	struct be_sprite *sprite =
-		container_of(listener, struct be_sprite,
-			     destroy_listener);
 
-	sprite->surface = NULL;
-}
 
-static void
-sprite_handle_pending_buffer_destroy(struct wl_listener *listener, void *data)
-{
-	struct be_sprite *sprite =
-		container_of(listener, struct be_sprite,
-			     pending_destroy_listener);
-
-	sprite->pending_surface = NULL;
-}
 
 /* returns a value between 0-255 range, where higher is brighter */
 static uint32_t
@@ -1239,7 +1235,7 @@ create_output_for_connector(struct be_compositor *ec,
 	}
 	
 	wl_list_insert(ec->base.output_list.prev, &output->base.link);
-
+	
 	output->scanout_buffer_destroy_listener.notify =
 		output_handle_scanout_buffer_destroy;
 	output->pending_scanout_buffer_destroy_listener.notify =
@@ -1251,7 +1247,9 @@ create_output_for_connector(struct be_compositor *ec,
 	output->base.assign_planes = be_assign_planes;
 	output->base.read_pixels = be_output_read_pixels;
 	output->base.set_dpms = be_set_dpms;
-
+	
+	Output_Update (output);
+	
 	return 0;
 
 	eglDestroySurface(ec->base.display, output->egl_surface);
@@ -1272,74 +1270,6 @@ err_free:
 	return -1;
 }
 
-static void
-create_sprites(struct be_compositor *ec)
-{
-	struct be_sprite *sprite;
-	drmModePlaneRes *plane_res;
-	drmModePlane *plane;
-	uint32_t i;
-
-	plane_res = drmModeGetPlaneResources(ec->drm.fd);
-	if (!plane_res) {
-		fprintf(stderr, "failed to get plane resources: %s\n",
-			strerror(errno));
-		return;
-	}
-
-	for (i = 0; i < plane_res->count_planes; i++) {
-		plane = drmModeGetPlane(ec->drm.fd, plane_res->planes[i]);
-		if (!plane)
-			continue;
-
-		sprite = malloc(sizeof(*sprite) + ((sizeof(uint32_t)) *
-						   plane->count_formats));
-		if (!sprite) {
-			fprintf(stderr, "%s: out of memory\n", __func__);
-			free(plane);
-			continue;
-		}
-		
-		memset(sprite, 0, sizeof *sprite);
-		
-		sprite->possible_crtcs = plane->possible_crtcs;
-		sprite->plane_id = plane->plane_id;
-		sprite->surface = NULL;
-		sprite->pending_surface = NULL;
-		sprite->fb_id = 0;
-		sprite->pending_fb_id = 0;
-		sprite->destroy_listener.notify = sprite_handle_buffer_destroy;
-		sprite->pending_destroy_listener.notify = sprite_handle_pending_buffer_destroy;
-		sprite->compositor = ec;
-		sprite->count_formats = plane->count_formats;
-		memcpy(sprite->formats, plane->formats, plane->count_formats * sizeof(plane->formats[0]));
-		drmModeFreePlane(plane);
-
-		wl_list_insert(&ec->sprite_list, &sprite->link);
-	}
-
-	free(plane_res->planes);
-	free(plane_res);
-}
-
-static void
-destroy_sprites(struct be_compositor *compositor)
-{
-	struct be_sprite *sprite, *next;
-	struct be_output *output;
-
-	output = container_of(compositor->base.output_list.next,
-			      struct be_output, base.link);
-
-	wl_list_for_each_safe(sprite, next, &compositor->sprite_list, link) {
-		drmModeSetPlane(compositor->drm.fd,
-				sprite->plane_id,
-				output->crtc_id, 0, 0,
-				0, 0, 0, 0, 0, 0, 0, 0);
-		drmModeRmFB(compositor->drm.fd, sprite->fb_id);
-		free(sprite);
-	}
-}
 
 static int
 create_outputs(struct be_compositor *ec, uint32_t option_connector,
@@ -1530,7 +1460,7 @@ be_destroy(struct weston_compositor *ec)
 		fprintf(stderr, "failed to drop master: %m\n");
 	tty_destroy(d->tty);
 
-	free(d);
+//	free(d);
 }
 
 static void

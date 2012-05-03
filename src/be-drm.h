@@ -54,6 +54,7 @@ struct be_output {
 	
 	struct gbm_surface *surface;
 	EGLSurface egl_surface;
+	
 	uint32_t current_fb_id;
 	uint32_t next_fb_id;
 	struct gbm_bo *current_bo;
@@ -61,8 +62,10 @@ struct be_output {
 	
 	struct wl_buffer *scanout_buffer;
 	struct wl_listener scanout_buffer_destroy_listener;
+	
 	struct wl_buffer *pending_scanout_buffer;
 	struct wl_listener pending_scanout_buffer_destroy_listener;
+	
 	struct backlight *backlight;
 };
 
@@ -97,6 +100,15 @@ struct be_sprite {
 };
 
 extern struct be_compositor gBE;
+<<<<<<< HEAD
+=======
+
+
+
+int		be_output_set_cursor		(struct weston_output *output_base, struct weston_input_device *eid);
+
+
+>>>>>>> 29b98d606c2aa382206d95d0e92c2b14679e77e9
 
 #endif
 
