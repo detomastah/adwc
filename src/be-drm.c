@@ -631,8 +631,108 @@ be_assign_planes(struct weston_output *output)
 	be_disable_unused_sprites(output);
 }
 
+static EGLImageKHR
+create_cursor_image(struct gbm_device *gbm,
+		    EGLDisplay display)
+{
+	PFNEGLCREATEIMAGEKHRPROC create_image;
+	struct gbm_bo *bo;
+	EGLImageKHR image;
+
+	create_image = (void *) eglGetProcAddress("eglCreateImageKHR");
+
+	bo = gbm_bo_create(gbm,
+			   /* width, height, */ 64, 64,
+			   GBM_BO_FORMAT_ARGB8888,
+			   GBM_BO_USE_CURSOR_64X64 | GBM_BO_USE_RENDERING);
+
+	image = create_image(display, NULL, EGL_NATIVE_PIXMAP_KHR, bo, NULL);
+	gbm_bo_destroy(bo);
+
+	return image;
+}
+
 static int
-be_output_set_cursor(struct weston_output *output_base, struct weston_input_device *eid)
+be_output_set_cursor(struct weston_output *output_base,
+		      struct weston_input_device *eid)
+{
+	PFNGLEGLIMAGETARGETTEXTURE2DOESPROC image_target_texture_2d;
+	struct be_output *output = (struct be_output *) output_base;
+	struct be_compositor *c =
+		(struct be_compositor *) output->base.compositor;
+	EGLint handle, stride;
+	int ret = -1;
+	struct gbm_bo *bo;
+
+	if (eid == NULL) {
+		drmModeSetCursor(c->drm.fd, output->crtc_id, 0, 0, 0);
+		return 0;
+	}
+	
+	if (eid->sprite->image == EGL_NO_IMAGE_KHR) {
+		eid->sprite->image = create_cursor_image(c->gbm, c->base.display);
+		if (eid->sprite->image == EGL_NO_IMAGE_KHR) 
+			goto out;
+	}
+
+	if (eid->sprite->geometry.width > 64 ||
+	    eid->sprite->geometry.height > 64)
+		goto out;
+		
+	glBindTexture(GL_TEXTURE_2D, eid->sprite->texture);
+	
+	image_target_texture_2d =
+		(void *) eglGetProcAddress("glEGLImageTargetTexture2DOES");
+
+	image_target_texture_2d(GL_TEXTURE_2D, eid->sprite->image);
+	
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 
+			eid->sprite->geometry.width, 
+			eid->sprite->geometry.height,
+			GL_BGRA_EXT, GL_UNSIGNED_BYTE, wl_shm_buffer_get_data(eid->sprite->buffer));
+
+	bo = gbm_bo_create_from_egl_image(c->gbm,
+					  c->base.display,
+					  eid->sprite->image, 64, 64,
+					  GBM_BO_USE_CURSOR_64X64);
+	/* Not suitable for hw cursor, fall back */
+	if (bo == NULL)
+		goto out;
+
+	handle = gbm_bo_get_handle(bo).s32;
+	stride = gbm_bo_get_pitch(bo);
+	gbm_bo_destroy(bo);
+
+	/* gbm_bo_create_from_egl_image() didn't always validate the usage
+	 * flags, and in that case we might end up with a bad stride. */
+	if (stride != 64 * 4)
+		goto out;
+
+	ret = drmModeSetCursor(c->drm.fd, output->crtc_id, handle, 64, 64);
+	if (ret) {
+		fprintf(stderr, "failed to set cursor: %s\n", strerror(-ret));
+		goto out;
+	}
+
+	ret = drmModeMoveCursor(c->drm.fd, output->crtc_id,
+				eid->sprite->geometry.x - output->base.x,
+				eid->sprite->geometry.y - output->base.y);
+	if (ret) {
+		fprintf(stderr, "failed to move cursor: %s\n", strerror(-ret));
+		goto out;
+	}
+	
+
+out:
+	if (ret)
+		drmModeSetCursor(c->drm.fd, output->crtc_id, 0, 0, 0);
+	puts("W1");
+	return ret;
+}
+
+
+static int
+__be_output_set_cursor(struct weston_output *output_base, struct weston_input_device *eid)
 {
 //	printf ("YUUUUUUPI\n");
 	struct be_output *output = (struct be_output *) output_base;
