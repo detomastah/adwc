@@ -855,8 +855,8 @@ weston_wm_handle_map_notify(struct weston_wm *wm, xcb_generic_event_t *event)
 		//	window->shsurf->type = SHELL_SURFACE_TRANSIENT;
 			window->shsurf->type = SHELL_SURFACE_TOPLEVEL;
 			
-			if (window->size_hints.flags & XCB_ICCCM_SIZE_HINT_P_POSITION) {
-				if (window->size_hints.flags & XCB_ICCCM_SIZE_HINT_P_SIZE) {
+			if (window->size_hints.flags & XCB_SIZE_HINT_P_POSITION) {
+				if (window->size_hints.flags & XCB_SIZE_HINT_P_SIZE) {
 					weston_surface_configure(window->shsurf->surface,
 						basex + window->size_hints.x,
 						basey + window->size_hints.y,
